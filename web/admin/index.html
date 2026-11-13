@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titan Admin</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14213D; --ink-soft: #4A5875; --muted: #6B778F; --paper: #EEF2F0; --panel: #FFFFFF; --mist: #D5DEDA; --line: #E4EAE7;
+    --grain: #E2B23A; --leaf: #2F7D5B; --leaf-bg: #DDEFE5; --alert: #C8462F; --alert-bg: #F6E3DE; --warn: #9A6A00; --warn-bg: #FBF0D5;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Archivo', system-ui, sans-serif; font-variation-settings: 'wdth' 100; background: var(--paper); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--grain); outline-offset: 2px; }
+  h1 { font-variation-settings: 'wdth' 120; font-weight: 800; font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 1rem; }
+  h2 { font-variation-settings: 'wdth' 112; font-weight: 700; font-size: 1.1rem; margin: 0 0 .75rem; }
+  .num { font-variation-settings: 'wdth' 70; font-feature-settings: 'tnum'; }
+
+  .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  aside { background: var(--ink); color: var(--paper); padding: 1.1rem .8rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  aside .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 1.35rem; padding: 0 .5rem 1rem; }
+  aside .brand span { font-variation-settings: 'wdth' 100; font-weight: 400; font-size: .8rem; color: #AFC0BA; margin-left: .3rem; }
+  aside nav a { display: flex; justify-content: space-between; padding: .5rem .6rem; border-radius: 6px; text-decoration: none; color: #DCE6E2; }
+  aside nav a:hover { background: #22325A; }
+  aside nav a[aria-current="page"] { background: #2A3C66; color: #fff; font-weight: 600; }
+  aside nav .badge { background: var(--alert); color: #fff; border-radius: 10px; padding: 0 .45rem; font-size: .8rem; }
+  aside .who { margin-top: 1.5rem; padding: .6rem; font-size: .85rem; color: #AFC0BA; border-top: 1px solid #2A3C66; }
+  aside .who button { margin-top: .4rem; }
+  main { padding: 1.5rem 2rem 3rem; min-width: 0; }
+  @media (max-width: 860px) {
+    .shell { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; }
+    aside nav { display: flex; flex-wrap: wrap; gap: .2rem; }
+    main { padding: 1rem; }
+  }
+
+  .panel { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1.25rem; min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .grid2 > * { min-width: 0; }
+  @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+  .tile { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: .9rem 1rem; }
+  .tile .v { font-size: 2rem; line-height: 1.1; font-variation-settings: 'wdth' 70; font-weight: 600; }
+  .tile .l { color: var(--muted); font-size: .88rem; }
+  .tile.bad .v { color: var(--alert); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .55rem .6rem .55rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .85rem; }
+  .scroll { overflow-x: auto; }
+  td.r, th.r { text-align: right; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: #F6F9F7; }
+
+  .pill { display: inline-flex; align-items: center; gap: .3rem; padding: .05rem .5rem; border-radius: 10px; font-size: .82rem; font-weight: 600; white-space: nowrap; }
+  .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .st-online, .sev-info { color: var(--leaf); background: var(--leaf-bg); }
+  .st-offline, .st-open, .sev-critical { color: var(--alert); background: var(--alert-bg); }
+  .st-registered, .sev-warning, .pending { color: var(--warn); background: var(--warn-bg); }
+  .st-disabled, .st-resolved, .st-acknowledged { color: var(--muted); background: #EEF1F4; }
+
+  button, .btn { font: inherit; font-weight: 600; padding: .45rem .85rem; border-radius: 6px; border: 1px solid var(--ink); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button.danger { border-color: var(--alert); color: var(--alert); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: .2rem .55rem; font-size: .85rem; }
+  aside button { background: transparent; color: #DCE6E2; border-color: #4A5B7A; }
+
+  form.f { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; align-items: end; }
+  form.f label, .lbl { display: grid; gap: .25rem; font-size: .85rem; color: var(--ink-soft); }
+  input, select, textarea { font: inherit; padding: .45rem .55rem; border: 1px solid var(--mist); border-radius: 6px; background: #fff; color: var(--ink); min-width: 0; width: 100%; }
+  textarea { min-height: 70px; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .muted { color: var(--muted); }
+  .small { font-size: .85rem; }
+  .err { color: var(--alert); }
+  .ok { color: var(--leaf); }
+  .secret { background: var(--warn-bg); border: 1px solid #E8D29A; padding: .75rem 1rem; border-radius: 8px; margin: .75rem 0; word-break: break-all; }
+  .secret code { font-size: 1rem; font-weight: 700; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .88em; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .empty { color: var(--muted); padding: .5rem 0; }
+  #toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--ink); color: var(--paper); padding: .7rem 1rem; border-radius: 8px; display: none; max-width: 420px; z-index: 10; }
+
+  /* chart */
+  .chart { position: relative; }
+  .chart svg { width: 100%; height: 260px; display: block; }
+  .chart .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); padding: .4rem .6rem; border-radius: 6px; font-size: .82rem; display: none; white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: .9rem; font-size: .85rem; color: var(--ink-soft); margin-top: .4rem; }
+  .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: .35rem; }
+
+  .login { max-width: 380px; margin: 12vh auto; }
+  .login .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 2rem; margin-bottom: 1rem; }
+  .login form { display: grid; gap: .8rem; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+  const app = document.getElementById('app');
+  let me = null;
+  const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'];
+  const KINDS = ['warehouse', 'aquaponics', 'hydroponics', 'greenhouse', 'cold_room', 'poultry', 'field', 'energy', 'other'];
+
+  // ---------- helpers ----------
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const h = (strings, ...vals) => strings.reduce((out, s, i) => out + s + (i < vals.length ? (vals[i] && vals[i].__html !== undefined ? vals[i].__html : esc(vals[i])) : ''), '');
+  const raw = (html) => ({ __html: html });
+  const ago = (t) => {
+    if (!t) return 'never';
+    const s = Math.round((Date.now() - new Date(t).getTime()) / 1000);
+    if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.round(s / 60)}m ago`; if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return new Date(t).toLocaleDateString();
+  };
+  const when = (t) => t ? new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const fmt = (v) => { const n = Number(v); return Number.isFinite(n) ? (Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2)) : '–'; };
+  const pill = (cls, text) => raw(`<span class="pill ${esc(cls)}">${esc(text)}</span>`);
+  const toast = (msg) => { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 4000); };
+
+  async function api(method, path, body) {
+    const res = await fetch('/admin/api' + path, {
+      method, credentials: 'same-origin',
+      headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(method !== 'GET' ? { 'X-Titan-Admin': '1' } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401 && path !== '/login') { me = null; renderLogin(); throw new Error('Signed out'); }
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : {};
+    if (!res.ok) throw new Error(json.message || json.error || `Request failed (${res.status})`);
+    return json;
+  }
+  const formData = (form) => Object.fromEntries(new FormData(form));
+  function bindForm(sel, fn) {
+    const form = app.querySelector(sel);
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button[type=submit]');
+      const msg = form.querySelector('.form-msg');
+      if (btn) btn.disabled = true;
+      if (msg) { msg.textContent = ''; msg.className = 'form-msg small'; }
+      try { await fn(formData(form), form); }
+      catch (err) { if (msg) { msg.textContent = err.message; msg.className = 'form-msg small err'; } else toast(err.message); }
+      finally { if (btn) btn.disabled = false; }
+    });
+  }
+  function onClick(sel, fn) {
+    app.querySelectorAll(sel).forEach((el) => el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      el.disabled = true;
+      try { await fn(el.dataset, el); } catch (err) { toast(err.message); } finally { el.disabled = false; }
+    }));
+  }
+  const options = (items, sel, valueKey = 'id', labelFn = (x) => x.name) =>
+    raw(items.map((x) => `<option value="${esc(x[valueKey])}" ${String(x[valueKey]) === String(sel) ? 'selected' : ''}>${esc(labelFn(x))}</option>`).join(''));
+
+  // ---------- layout ----------
+  const NAV = [
+    ['overview', 'Overview'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'],
+    ['orgs', 'Organisations & keys'], ['frequency', 'Reporting frequency'], ['billing', 'Plans & usage'], ['demos', 'Demo requests'], ['settings', 'Settings'],
+  ];
+  let openAlerts = 0;
+  function layout(active, content) {
+    app.innerHTML = h`<div class="shell">
+      <aside>
+        <div class="brand">Titan<span>Admin</span></div>
+        <nav aria-label="Admin">${raw(NAV.map(([k, label]) => `<a href="#${k}" ${k === active ? 'aria-current="page"' : ''}>${esc(label)}${k === 'alerts' && openAlerts ? `<span class="badge">${openAlerts}</span>` : ''}</a>`).join(''))}</nav>
+        <div class="who">${me.email}<br>${me.role === 'admin' ? 'Admin' : 'Ops'}<br><button class="small" id="logout">Sign out</button></div>
+      </aside>
+      <main>${raw(content)}</main>
+    </div>`;
+    app.querySelector('#logout').onclick = async () => { await api('POST', '/logout'); me = null; renderLogin(); };
+  }
+
+  function renderLogin() {
+    app.innerHTML = `<div class="login panel">
+      <div class="brand">Titan</div>
+      <form id="login-form">
+        <label class="lbl">Email<input name="email" type="email" autocomplete="username" required></label>
+        <label class="lbl">Password<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">Sign in</button>
+        <p class="form-msg small"></p>
+      </form></div>`;
+    bindForm('#login-form', async (d) => { await api('POST', '/login', d); me = await api('GET', '/me'); route(); });
+  }
+
+  // ---------- views ----------
+  const views = {};
+
+  views.overview = async () => {
+    const { counts: c, alerts, sites } = await api('GET', '/overview');
+    openAlerts = c.open_alerts;
+    layout('overview', h`<h1>Overview</h1>
+      <div class="tiles">
+        <div class="tile"><div class="v">${c.online}</div><div class="l">Devices online</div></div>
+        <div class="tile ${Number(c.offline) ? 'bad' : ''}"><div class="v">${c.offline}</div><div class="l">Devices offline</div></div>
+        <div class="tile"><div class="v">${c.awaiting}</div><div class="l">Awaiting first connection</div></div>
+        <div class="tile ${Number(c.critical) ? 'bad' : ''}"><div class="v">${c.critical}</div><div class="l">Critical alerts open</div></div>
+        <div class="tile"><div class="v">${c.config_pending}</div><div class="l">Configs not yet applied</div></div>
+        <div class="tile"><div class="v">${Number(c.messages_today).toLocaleString()}</div><div class="l">Messages today</div></div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Open alerts</h2>${raw(alertTable(alerts, true))}</div>
+        <div class="panel"><h2>Sites</h2>${raw(sites.length ? `<div class="scroll"><table><thead><tr><th>Site</th><th>Organisation</th><th class="r">Online</th><th class="r">Alerts</th></tr></thead><tbody>
+          ${sites.map((s) => `<tr class="click" data-href="#site-${esc(s.id)}"><td>${esc(s.name)}<div class="small muted">${esc(s.kind)}</div></td><td>${esc(s.org_name)}</td><td class="r num">${s.online}/${s.devices}</td><td class="r">${Number(s.open_alerts) ? `<span class="pill sev-critical">${s.open_alerts}</span>` : '<span class="muted">0</span>'}</td></tr>`).join('')}
+          </tbody></table></div>` : '<p class="empty">No sites yet. Add one under Sites.</p>')}</div>
+      </div>`);
+    bindAlertButtons();
+    bindRowLinks();
+  };
+
+  function alertTable(alerts, compact) {
+    if (!alerts.length) return '<p class="empty">Nothing needs attention.</p>';
+    return `<div class="scroll"><table><thead><tr><th>Alert</th>${compact ? '' : '<th>Status</th>'}<th>Where</th><th>Opened</th><th></th></tr></thead><tbody>${alerts.map((a) => `
+      <tr><td><span class="pill sev-${esc(a.severity)}">${esc(a.severity)}</span> ${esc(a.title)}</td>
+      ${compact ? '' : `<td><span class="pill st-${esc(a.status)}">${esc(a.status)}</span>${a.acked_by_email ? `<div class="small muted">by ${esc(a.acked_by_email)}</div>` : ''}</td>`}
+      <td>${a.site_id ? `<a href="#site-${esc(a.site_id)}">${esc(a.site_name ?? 'Site')}</a>` : ''}${a.device_id ? `<div class="small"><a href="#device-${esc(a.device_id)}">${esc(a.device_id)}</a>${a.channel ? ' · ' + esc(a.channel) : ''}</div>` : ''}</td>
+      <td class="small">${esc(ago(a.opened_at))}</td>
+      <td class="r"><div class="row" style="justify-content:flex-end">
+        ${a.status === 'open' ? `<button class="small" data-ack="${esc(a.id)}">Acknowledge</button>` : ''}
+        ${a.status !== 'resolved' ? `<button class="small" data-resolve="${esc(a.id)}">Resolve</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function bindAlertButtons() {
+    onClick('[data-ack]', async (d) => { await api('POST', `/alerts/${d.ack}/ack`); toast('Alert acknowledged'); route(); });
+    onClick('[data-resolve]', async (d) => { await api('POST', `/alerts/${d.resolve}/resolve`); toast('Alert resolved'); route(); });
+  }
+  function bindRowLinks() { app.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => (location.hash = tr.dataset.href))); }
+
+  views.alerts = async (_, params) => {
+    const status = params.get('status') || '';
+    const { alerts } = await api('GET', '/alerts' + (status ? `?status=${status}` : ''));
+    layout('alerts', h`<h1>Alerts</h1>
+      <div class="row" style="margin-bottom:1rem">
+        ${raw([['', 'Needs attention'], ['open', 'Open'], ['acknowledged', 'Acknowledged'], ['resolved', 'Resolved']].map(([v, l]) =>
+          `<a class="btn ${v === status ? 'primary' : ''}" style="text-decoration:none;${v === status ? 'background:var(--ink);color:var(--paper)' : ''}" href="#alerts${v ? '?status=' + v : ''}">${l}</a>`).join(''))}
+      </div>
+      <div class="panel">${raw(alertTable(alerts, false))}</div>`);
+    bindAlertButtons();
+  };
+
+  views.sites = async () => {
+    const [{ sites }, { orgs }] = await Promise.all([api('GET', '/sites'), api('GET', '/orgs')]);
+    layout('sites', h`<h1>Sites</h1>
+      <div class="panel"><h2>Add a site</h2>
+        <form class="f" id="site-form">
+          <label>Organisation<select name="orgId" required>${options(orgs)}</select></label>
+          <label>Name<input name="name" required placeholder="Iseyin Warehouse 1"></label>
+          <label>Type<select name="kind">${raw(KINDS.map((k) => `<option>${k}</option>`).join(''))}</select></label>
+          <label>StorageX / external ID<input name="externalRef" placeholder="optional"></label>
+          <label>Latitude<input name="lat" inputmode="decimal" placeholder="7.97"></label>
+          <label>Longitude<input name="lng" inputmode="decimal" placeholder="3.59"></label>
+          <label style="grid-column:1/-1">Address<input name="address"></label>
+          <div><button class="primary" type="submit">Add site</button></div>
+          <p class="form-msg small" style="grid-column:1/-1"></p>
+        </form></div>
+      <div class="panel">${raw(sites.length ? `<div class="scroll"><table><thead><tr><th>Site</th><th>Organisation</th><th>Type</th><th>External ID</th><th class="r">Devices</th></tr></thead><tbody>
+        ${sites.map((s) => `<tr class="click" data-href="#site-${esc(s.id)}"><td>${esc(s.name)}</td><td>${esc(s.org_name)}</td><td>${esc(s.kind)}</td><td><code>${esc(s.external_ref ?? '')}</code></td><td class="r num">${s.devices}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="empty">No sites yet.</p>')}</div>`);
+    bindRowLinks();
+    bindForm('#site-form', async (d) => { const { site } = await api('POST', '/sites', d); toast('Site added'); location.hash = `#site-${site.id}`; });
+  };
+
+  views.site = async (id) => {
+    const { site, zones, stacks, devices, latest, alerts } = await api('GET', `/sites/${id}`);
+    const { metrics } = await api('GET', '/metrics');
+    const label = Object.fromEntries(metrics.map((m) => [m.key, m]));
+    layout('sites', h`<p class="small"><a href="#sites">Sites</a></p><h1>${site.name}</h1>
+      <div class="grid2">
+        <div class="panel"><h2>Details</h2><dl class="kv">
+          <dt>Organisation</dt><dd>${site.org_name}</dd><dt>Type</dt><dd>${site.kind}</dd>
+          <dt>External ID</dt><dd><code>${site.external_ref ?? '–'}</code></dd><dt>Site ID</dt><dd><code>${site.id}</code></dd>
+          <dt>Location</dt><dd>${site.lat ? `${site.lat}, ${site.lng}` : '–'}</dd><dt>Address</dt><dd>${site.address ?? '–'}</dd></dl></div>
+        <div class="panel"><h2>Zones and stacks</h2>
+          <p class="small muted">Codes must match the first two parts of device channels, e.g. <code>z1/stack-a/mst1</code>.</p>
+          ${raw(zones.length ? `<table><tbody>${zones.map((z) => `<tr><td><code>${esc(z.code)}</code> ${esc(z.name ?? '')}</td><td>${stacks.filter((s) => s.zone_code === z.code).map((s) => `<code>${esc(s.code)}</code> ${esc(s.commodity ?? '')}${s.external_ref ? ` <span class="small muted">lot ${esc(s.external_ref)}</span>` : ''}`).join('<br>') || '<span class="muted">No stacks</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No zones yet.</p>')}
+          <form class="f" id="zone-form" style="margin-top:1rem"><label>New zone code<input name="code" placeholder="z1" required></label><label>Name<input name="name" placeholder="Bay 1"></label><div><button type="submit">Add zone</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>
+          ${raw(zones.length ? `<form class="f" id="stack-form" style="margin-top:1rem">
+            <label>Zone<select name="zone">${zones.map((z) => `<option>${esc(z.code)}</option>`).join('')}</select></label>
+            <label>Stack code<input name="code" placeholder="stack-a" required></label>
+            <label>Crop<select name="commodity"><option value="">–</option>${['maize', 'paddy', 'soybean', 'sorghum', 'wheat', 'sesame'].map((c) => `<option>${c}</option>`).join('')}</select></label>
+            <label>StorageX lot ID<input name="externalRef"></label>
+            <div><button type="submit">Add stack</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>` : '')}
+        </div>
+      </div>
+      <div class="panel"><h2>Latest readings</h2>${raw(latest.length ? `<div class="scroll"><table><thead><tr><th>Reading</th><th>Channel</th><th>Device</th><th class="r">Value</th><th>When</th></tr></thead><tbody>
+        ${latest.map((r) => `<tr><td>${esc(label[r.metric]?.label ?? r.metric)}${(r.flags & 4) ? ' <span class="small muted">calculated</span>' : ''}</td><td><code>${esc(r.channel)}</code></td><td><a href="#device-${esc(r.device_id)}">${esc(r.device_id)}</a></td><td class="r num">${fmt(r.value)} <span class="muted small">${esc(label[r.metric]?.unit ?? '')}</span></td><td class="small">${esc(ago(r.time))}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="empty">No readings in the last 2 days.</p>')}</div>
+      <div class="grid2">
+        <div class="panel"><h2>Devices</h2>${raw(deviceTable(devices))}<p><a href="#devices?site=${esc(site.id)}">Register a device here</a></p></div>
+        <div class="panel"><h2>Recent alerts</h2>${raw(alertTable(alerts.slice(0, 15), false))}</div>
+      </div>`);
+    bindRowLinks(); bindAlertButtons();
+    bindForm('#zone-form', async (d) => { await api('POST', `/sites/${id}/zones`, d); toast('Zone added'); route(); });
+    bindForm('#stack-form', async (d) => { await api('POST', `/sites/${id}/stacks`, d); toast('Stack added'); route(); });
+  };
+
+  function deviceTable(devices) {
+    if (!devices.length) return '<p class="empty">No devices yet.</p>';
+    return `<div class="scroll"><table><thead><tr><th>Device</th><th>Status</th><th>Last seen</th><th>Config</th></tr></thead><tbody>${devices.map((dv) => `
+      <tr class="click" data-href="#device-${esc(dv.id)}"><td><code>${esc(dv.id)}</code><div class="small muted">${esc(dv.site_name ?? '')} ${dv.connectivity === 'gsm' ? 'GSM' : 'Wi-Fi'}</div></td>
+      <td><span class="pill st-${esc(dv.status)}">${dv.status === 'registered' ? 'awaiting setup' : esc(dv.status)}</span></td>
+      <td class="small">${esc(ago(dv.last_seen_at))}</td>
+      <td>${Number(dv.config_acked_version) < Number(dv.config_version) ? '<span class="pill pending">pending</span>' : '<span class="small muted">applied</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  views.devices = async (_, params) => {
+    const [{ devices }, { sites }, { types }] = await Promise.all([api('GET', '/devices'), api('GET', '/sites'), api('GET', '/device-types')]);
+    const filter = (params.get('q') || '').toLowerCase();
+    const shown = devices.filter((d) => !filter || [d.id, d.site_name, d.org_name, d.status].join(' ').toLowerCase().includes(filter));
+    layout('devices', h`<h1>Devices</h1>
+      <div class="panel"><h2>Register a device</h2>
+        <p class="small muted">Registering gives you a one-time provisioning code (valid 7 days). Enter it on the device during installation.</p>
+        <form class="f" id="dev-form">
+          <label>Device ID<input name="id" placeholder="WG-000123" required pattern="[A-Za-z]{2,6}-[0-9]{6,}"></label>
+          <label>Site<select name="siteId" required>${options(sites, params.get('site'), 'id', (s) => `${s.name} (${s.org_name})`)}</select></label>
+          <label>Type<select name="typeId">${options(types, 'wareguard-v1', 'id', (t) => t.name)}</select></label>
+          <label>Connection<select name="connectivity"><option value="wifi">Wi-Fi</option><option value="gsm">GSM</option></select></label>
+          <label>Name<input name="name" placeholder="optional"></label>
+          <div><button class="primary" type="submit">Register device</button></div>
+          <div class="form-msg small" style="grid-column:1/-1"></div>
+        </form><div id="code-out"></div></div>
+      <div class="panel">
+        <form class="row" id="dev-filter" style="margin-bottom:.75rem"><input name="q" value="${filter}" placeholder="Filter by ID, site, organisation or status" style="max-width:360px"><button type="submit">Filter</button></form>
+        ${raw(deviceTable(shown))}</div>`);
+    bindRowLinks();
+    bindForm('#dev-filter', async (d) => { location.hash = `#devices${d.q ? '?q=' + encodeURIComponent(d.q) : ''}`; });
+    bindForm('#dev-form', async (d, form) => {
+      const out = await api('POST', '/devices', d);
+      form.reset();
+      app.querySelector('#code-out').innerHTML = h`<div class="secret">Provisioning code for <b>${out.id}</b>: <code>${out.provisioningCode}</code><br><span class="small">Shown once. Valid for ${out.expiresInDays} days. <a href="#device-${out.id}">Open device</a></span></div>`;
+    });
+  };
+
+  views.device = async (id, params) => {
+    const { device: dv, keys, latest, events, configs, alerts } = await api('GET', `/devices/${encodeURIComponent(id)}`);
+    const { metrics } = await api('GET', '/metrics');
+    const label = Object.fromEntries(metrics.map((m) => [m.key, m]));
+    const st = dv.last_state || {};
+    const o = dv.config_override || {};
+    const typeDef = (dv.type_defaults || {})[dv.connectivity] || {};
+    const iv = (k) => (o.interval || {})[k] ?? '';
+    const th = (m, k) => ((o.thresholds || {})[m] || {})[k] ?? '';
+    const chartMetrics = [...new Set(latest.filter((r) => !(r.flags & 4) || r.metric === 'air.dew_point' || r.metric === 'produce.emc').map((r) => r.metric))];
+    const metric = params.get('metric') || chartMetrics[0] || 'air.temperature';
+    const hours = params.get('hours') || '24';
+    const pendingCfg = Number(dv.config_acked_version) < Number(dv.config_version);
+    layout('devices', h`<p class="small"><a href="#devices">Devices</a></p>
+      <div class="row" style="justify-content:space-between"><h1 style="margin:0"><code>${dv.id}</code></h1>
+        <span class="pill st-${dv.status}">${dv.status === 'registered' ? 'awaiting setup' : dv.status}</span></div>
+      <p class="muted">${dv.type_name} at <a href="#site-${dv.site_id}">${dv.site_name ?? 'no site'}</a> · ${dv.org_name} · ${dv.connectivity === 'gsm' ? 'GSM' : 'Wi-Fi'} · last seen ${ago(dv.last_seen_at)}</p>
+      <div class="tiles">
+        <div class="tile"><div class="v">${st.rssi ?? '–'}</div><div class="l">Signal (dBm)</div></div>
+        <div class="tile"><div class="v">${st.bat ?? '–'}</div><div class="l">Battery (V)</div></div>
+        <div class="tile ${Number(st.bufq) > 0 ? 'bad' : ''}"><div class="v">${st.bufq ?? '–'}</div><div class="l">Waiting to send</div></div>
+        <div class="tile"><div class="v">${dv.config_acked_version}/${dv.config_version}</div><div class="l">Config applied / latest</div></div>
+      </div>
+      <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">History</h2>
+        <form class="row" id="chart-form">
+          <select name="metric" aria-label="Reading">${raw(chartMetrics.map((m) => `<option value="${esc(m)}" ${m === metric ? 'selected' : ''}>${esc(label[m]?.label ?? m)}</option>`).join('') || '<option>air.temperature</option>')}</select>
+          <select name="hours" aria-label="Period">${raw([['6', '6 hours'], ['24', '24 hours'], ['168', '7 days'], ['720', '30 days']].map(([v, l]) => `<option value="${v}" ${v === hours ? 'selected' : ''}>${l}</option>`).join(''))}</select>
+        </form></div>
+        <div class="chart" id="chart"><p class="empty">Loading…</p></div></div>
+      <div class="grid2">
+        <div class="panel"><h2>Latest readings</h2>${raw(latest.length ? `<table><thead><tr><th>Reading</th><th>Channel</th><th class="r">Value</th><th>When</th></tr></thead><tbody>${latest.map((r) => `<tr><td>${esc(label[r.metric]?.label ?? r.metric)}</td><td><code>${esc(r.channel)}</code></td><td class="r num">${fmt(r.value)} <span class="small muted">${esc(label[r.metric]?.unit ?? '')}</span>${r.quality !== 'ok' ? ` <span class="pill sev-warning">${esc(r.quality)}</span>` : ''}</td><td class="small">${esc(ago(r.time))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No readings yet.</p>')}</div>
+        <div class="panel"><h2>Configuration ${raw(pendingCfg ? '<span class="pill pending">waiting for device</span>' : '')}</h2>
+          <p class="small muted">Blank intervals use the device-type default for ${dv.connectivity === 'gsm' ? 'GSM' : 'Wi-Fi'}: telemetry ${typeDef.telemetry_s ?? '?'}s, moisture ${typeDef.moisture_s ?? '?'}s, heartbeat ${typeDef.heartbeat_s ?? '?'}s.</p>
+          <form class="f" id="cfg-form">
+            <label>Connection<select name="connectivity"><option value="wifi" ${dv.connectivity === 'wifi' ? 'selected' : ''}>Wi-Fi</option><option value="gsm" ${dv.connectivity === 'gsm' ? 'selected' : ''}>GSM</option></select></label>
+            <label>Telemetry every (s)<input name="telemetry_s" inputmode="numeric" value="${iv('telemetry_s')}"></label>
+            <label>Moisture every (s)<input name="moisture_s" inputmode="numeric" value="${iv('moisture_s')}"></label>
+            <label>Heartbeat every (s)<input name="heartbeat_s" inputmode="numeric" value="${iv('heartbeat_s')}"></label>
+            <label>Max temperature (°C)<input name="t_max" inputmode="decimal" value="${th('air.temperature', 'max')}"></label>
+            <label>Max humidity (%RH)<input name="h_max" inputmode="decimal" value="${th('air.humidity', 'max')}"></label>
+            <label>Max moisture (% wb)<input name="m_max" inputmode="decimal" value="${th('produce.moisture', 'max')}"></label>
+            <label>Local alarm<select name="alarm"><option value="on" ${o.alarm_enable !== false ? 'selected' : ''}>On</option><option value="off" ${o.alarm_enable === false ? 'selected' : ''}>Off</option></select></label>
+            <div><button class="primary" type="submit">Save and send to device</button></div>
+            <p class="form-msg small" style="grid-column:1/-1"></p>
+          </form>
+          <h2 style="margin-top:1.2rem">Commands</h2>
+          <div class="row">
+            <button data-cmd="alarm_ack">Silence alarm</button><button data-cmd="send_state">Request status</button>
+            <button data-cmd="time_sync">Sync clock</button><button data-cmd="reboot" class="danger">Reboot</button>
+            <button id="new-code">New provisioning code</button>
+            ${raw(me.role === 'admin' ? `<button id="toggle-dev" class="danger">${dv.status === 'disabled' ? 'Enable device' : 'Disable device'}</button>` : '')}
+          </div><div id="code-out"></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Events</h2>${raw(events.length ? `<table><tbody>${events.map((e) => `<tr><td><span class="pill sev-${esc(e.severity)}">${esc(e.code)}</span> ${esc(e.message ?? '')}${e.channel ? ` <code>${esc(e.channel)}</code>` : ''}</td><td class="small">${esc(when(e.time))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No events.</p>')}</div>
+        <div class="panel"><h2>Alerts</h2>${raw(alertTable(alerts, false))}</div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Config history</h2>${raw(configs.length ? `<table><thead><tr><th>Version</th><th>Sent</th><th>Applied</th></tr></thead><tbody>${configs.map((c) => `<tr><td>${c.version}</td><td class="small">${esc(when(c.created_at))}</td><td class="small">${c.acked_at ? esc(when(c.acked_at)) : '<span class="pill pending">pending</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No config sent yet.</p>')}</div>
+        <div class="panel"><h2>Signing keys</h2>${raw(keys.length ? `<table><tbody>${keys.map((k) => `<tr><td><code>${esc(k.key_id)}</code> ${esc(k.alg)}</td><td class="small">${esc(when(k.created_at))}${k.retired_at ? ' (retired)' : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Not provisioned yet. The device registers its key on first boot.</p>')}</div>
+      </div>`);
+    bindAlertButtons();
+    app.querySelector('#chart-form').addEventListener('change', (e) => { const d = formData(e.currentTarget); location.hash = `#device-${id}?metric=${encodeURIComponent(d.metric)}&hours=${d.hours}`; });
+    loadChart(id, metric, hours, label[metric]);
+    bindForm('#cfg-form', async (d) => {
+      const num = (v) => (v === '' ? undefined : v);
+      await api('POST', `/devices/${encodeURIComponent(id)}/config`, {
+        connectivity: d.connectivity,
+        interval: { telemetry_s: num(d.telemetry_s), moisture_s: num(d.moisture_s), heartbeat_s: num(d.heartbeat_s) },
+        thresholds: { 'air.temperature': { max: d.t_max }, 'air.humidity': { max: d.h_max }, 'produce.moisture': { max: d.m_max } },
+        alarm_enable: d.alarm === 'on', cal: o.cal || {},
+      });
+      toast('Config sent. It shows as applied once the device confirms.');
+      route();
+    });
+    onClick('[data-cmd]', async (d) => { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: d.cmd }); toast('Command sent'); });
+    onClick('#new-code', async () => {
+      const out = await api('POST', `/devices/${encodeURIComponent(id)}/code`);
+      app.querySelector('#code-out').innerHTML = h`<div class="secret">New provisioning code: <code>${out.provisioningCode}</code><br><span class="small">Valid ${out.expiresInDays} days. Use it to re-provision or rotate the device key.</span></div>`;
+    });
+    onClick('#toggle-dev', async () => { await api('POST', `/devices/${encodeURIComponent(id)}/status`, { disabled: dv.status !== 'disabled' }); route(); });
+  };
+
+  // Line chart: one line per channel, crosshair tooltip, legend for 2+ channels.
+  async function loadChart(id, metric, hours, meta) {
+    const el = app.querySelector('#chart');
+    let data;
+    try { data = await api('GET', `/devices/${encodeURIComponent(id)}/series?metric=${encodeURIComponent(metric)}&hours=${hours}`); }
+    catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+    if (!data.points.length) { el.innerHTML = '<p class="empty">No readings in this period.</p>'; return; }
+    const channels = [...new Set(data.points.map((p) => p.channel))].slice(0, 4);
+    const W = 900, H = 260, L = 48, R = 12, T = 12, B = 28;
+    const ts = data.points.map((p) => new Date(p.t).getTime());
+    const t0 = Math.min(...ts), t1 = Math.max(...ts) || t0 + 1;
+    let v0 = Math.min(...data.points.map((p) => p.avg)), v1 = Math.max(...data.points.map((p) => p.avg));
+    if (v0 === v1) { v0 -= 1; v1 += 1; }
+    const pad = (v1 - v0) * 0.1; v0 -= pad; v1 += pad;
+    const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
+    const y = (v) => T + (1 - (v - v0) / (v1 - v0)) * (H - T - B);
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => v0 + f * (v1 - v0));
+    const series = channels.map((ch, i) => ({ ch, color: SERIES[i], pts: data.points.filter((p) => p.channel === ch).map((p) => ({ t: new Date(p.t).getTime(), v: p.avg, min: p.min, max: p.max })) }));
+    const tfmt = (t) => new Date(t).toLocaleString([], Number(hours) > 48 ? { month: 'short', day: 'numeric' } : Number(hours) > 6 ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(meta?.label ?? metric)} over the last ${esc(hours)} hours">
+      ${ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#E4EAE7" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#6B778F">${fmt(v)}</text>`).join('')}
+      <text x="${L}" y="${H - 8}" font-size="11" fill="#6B778F">${esc(tfmt(t0))}</text>
+      <text x="${W - R}" y="${H - 8}" font-size="11" fill="#6B778F" text-anchor="end">${esc(tfmt(t1))}</text>
+      ${series.map((s) => `<polyline fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="${s.pts.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')}"/>`).join('')}
+      <line id="xh" y1="${T}" y2="${H - B}" stroke="#14213D" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>
+      <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/>
+    </svg><div class="tip"></div>
+    ${series.length > 1 ? `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.ch)}</span>`).join('')}</div>` : `<div class="legend"><span>${esc(series[0].ch)} · ${esc(meta?.unit ?? '')} · ${esc(data.bucket)} averages</span></div>`}`;
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), xh = el.querySelector('#xh');
+    const all = [...new Set(series.flatMap((s) => s.pts.map((p) => p.t)))].sort((a, b) => a - b);
+    el.querySelector('#hit').addEventListener('mousemove', (e) => {
+      const box = svg.getBoundingClientRect();
+      const tx = t0 + ((e.clientX - box.left) / box.width * W - L) / (W - L - R) * (t1 - t0);
+      const near = all.reduce((a, b) => (Math.abs(b - tx) < Math.abs(a - tx) ? b : a), all[0]);
+      xh.setAttribute('x1', x(near)); xh.setAttribute('x2', x(near)); xh.setAttribute('opacity', '0.35');
+      const rows = series.map((s) => { const p = s.pts.find((q) => q.t === near); return p ? `<div><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:.35rem"></i>${esc(s.ch)}: <b>${fmt(p.v)}</b> ${esc(meta?.unit ?? '')} <span style="opacity:.7">(${fmt(p.min)}–${fmt(p.max)})</span></div>` : ''; }).join('');
+      tip.innerHTML = `<div style="opacity:.75">${esc(new Date(near).toLocaleString())}</div>${rows}`;
+      tip.style.display = 'block';
+      const px = (x(near) / W) * box.width;
+      tip.style.left = Math.min(px + 12, box.width - tip.offsetWidth) + 'px';
+      tip.style.top = '8px';
+    });
+    el.querySelector('#hit').addEventListener('mouseleave', () => { tip.style.display = 'none'; xh.setAttribute('opacity', '0'); });
+  }
+
+  views.rules = async () => {
+    const [{ rules }, { orgs }, { sites }, { metrics }, { contacts }] = await Promise.all([api('GET', '/rules'), api('GET', '/orgs'), api('GET', '/sites'), api('GET', '/metrics'), api('GET', '/contacts')]);
+    layout('rules', h`<h1>Alert rules</h1>
+      <div class="panel"><h2>Add a rule</h2>
+        <form class="f" id="rule-form">
+          <label>Organisation<select name="orgId" required>${options(orgs)}</select></label>
+          <label>Site<select name="siteId"><option value="">All sites</option>${options(sites, '', 'id', (s) => `${s.name} (${s.org_name})`)}</select></label>
+          <label>Reading<select name="metric">${options(metrics, 'air.humidity', 'key', (m) => `${m.label} (${m.unit})`)}</select></label>
+          <label>When it is<select name="op"><option value="gt">above</option><option value="lt">below</option></select></label>
+          <label>Threshold<input name="threshold" inputmode="decimal" required></label>
+          <label>For at least (minutes)<input name="minutes" inputmode="numeric" value="0"></label>
+          <label>Clear margin<input name="hysteresis" inputmode="decimal" value="0" title="How far back past the threshold before the alert clears"></label>
+          <label>Severity<select name="severity"><option>warning</option><option>critical</option><option>info</option></select></label>
+          <label>Channel (optional)<input name="channel" placeholder="z1/stack-a/mst1"></label>
+          <div><button class="primary" type="submit">Add rule</button></div>
+          <p class="form-msg small" style="grid-column:1/-1"></p>
+        </form></div>
+      <div class="panel">${raw(rules.length ? `<div class="scroll"><table><thead><tr><th>Rule</th><th>Scope</th><th>Severity</th><th></th></tr></thead><tbody>${rules.map((r) => `
+        <tr><td>${esc(r.metric)} ${r.op === 'gt' ? 'above' : 'below'} <b class="num">${esc(r.threshold)}</b>${Number(r.duration_s) ? ` for ${Math.round(r.duration_s / 60)} min` : ''}${Number(r.hysteresis) ? ` <span class="small muted">clears ${esc(r.hysteresis)} back</span>` : ''}</td>
+        <td>${esc(r.org_name)}<div class="small muted">${esc(r.site_name ?? 'all sites')}${r.channel ? ' · ' + esc(r.channel) : ''}</div></td>
+        <td><span class="pill sev-${esc(r.severity)}">${esc(r.severity)}</span></td>
+        <td class="r"><button class="small" data-toggle="${esc(r.id)}">${r.enabled === true || r.enabled === 't' ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No rules yet.</p>')}</div>
+      <div class="panel"><h2>Who gets alerted</h2>
+        <form class="f" id="contact-form">
+          <label>Organisation<select name="orgId" required>${options(orgs)}</select></label>
+          <label>Site<select name="siteId"><option value="">All sites</option>${options(sites, '', 'id', (s) => s.name)}</select></label>
+          <label>By<select name="channel"><option value="email">Email</option><option value="sms">SMS</option></select></label>
+          <label>Address or phone<input name="address" required placeholder="ops@… or 2348012345678"></label>
+          <label>Minimum severity<select name="minSeverity"><option>warning</option><option>critical</option><option>info</option></select></label>
+          <div><button type="submit">Add contact</button></div>
+          <p class="form-msg small" style="grid-column:1/-1"></p>
+        </form>
+        ${raw(contacts.length ? `<table style="margin-top:1rem"><tbody>${contacts.map((c) => `<tr><td>${esc(c.channel === 'sms' ? 'SMS' : 'Email')} ${esc(c.address)}</td><td>${esc(c.org_name)}<div class="small muted">${esc(c.site_name ?? 'all sites')}, ${esc(c.min_severity)} and above</div></td><td class="r"><button class="small danger" data-del-contact="${esc(c.id)}">Remove</button></td></tr>`).join('')}</tbody></table>` : '<p class="empty">Nobody is set to receive alerts yet.</p>')}
+      </div>`);
+    bindForm('#rule-form', async (d) => { await api('POST', '/rules', { ...d, durationS: Number(d.minutes || 0) * 60 }); toast('Rule added'); route(); });
+    bindForm('#contact-form', async (d) => { await api('POST', '/contacts', d); toast('Contact added'); route(); });
+    onClick('[data-toggle]', async (d) => { await api('POST', `/rules/${d.toggle}/toggle`); route(); });
+    onClick('[data-del-contact]', async (d) => { await api('DELETE', `/contacts/${d.delContact}`); route(); });
+  };
+
+  views.orgs = async () => {
+    const [{ orgs }, { keys }] = await Promise.all([api('GET', '/orgs'), api('GET', '/apikeys')]);
+    const admin = me.role === 'admin';
+    layout('orgs', h`<h1>Organisations & API keys</h1>
+      <div class="grid2">
+        <div class="panel"><h2>Add an organisation</h2>
+          <form class="f" id="org-form">
+            <label>Name<input name="name" required></label>
+            <label>Type<select name="kind"><option value="client">Client (owns devices)</option><option value="consumer">Data user (lender, insurer, platform)</option></select></label>
+            <label>Device ID prefix<input name="devicePrefix" placeholder="e.g. AQF" maxlength="6"></label>
+            <label>Billing email<input name="billingEmail" type="email"></label>
+            <div><button class="primary" type="submit">Add</button></div><p class="form-msg small" style="grid-column:1/-1"></p>
+          </form></div>
+        <div class="panel"><h2>Create an API key</h2>
+          ${raw(admin ? `<form class="f" id="key-form">
+            <label>Organisation<select name="orgId" required>${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
+            <label>Used by<input name="name" required placeholder="StorageX"></label>
+            <fieldset style="grid-column:1/-1;border:0;padding:0;margin:0" class="row small">
+              ${['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants'].map((s, i) => `<label class="row" style="gap:.3rem"><input type="checkbox" name="scope_${i}" value="${s}" ${i < 2 ? 'checked' : ''} style="width:auto"> ${s}</label>`).join('')}
+            </fieldset>
+            <div><button class="primary" type="submit">Create key</button></div><p class="form-msg small" style="grid-column:1/-1"></p>
+          </form><div id="key-out"></div>` : '<p class="muted">Only admins can create keys.</p>')}</div>
+      </div>
+      <div class="panel"><h2>Organisations</h2><div class="scroll"><table><thead><tr><th>Name</th><th>Type</th><th>Prefix</th><th class="r">Sites</th><th class="r">Devices</th><th>Plan</th><th>ID</th></tr></thead><tbody>
+        ${raw(orgs.map((o) => `<tr><td>${esc(o.name)}</td><td>${esc(o.kind)}</td><td>${esc(o.device_prefix ?? '')}</td><td class="r num">${o.sites}</td><td class="r num">${o.devices}</td><td>${esc(o.plan_id ?? '–')}</td><td><code class="small">${esc(o.id)}</code></td></tr>`).join(''))}
+      </tbody></table></div></div>
+      <div class="panel"><h2>API keys</h2>${raw(keys.length ? `<div class="scroll"><table><thead><tr><th>Key</th><th>Organisation</th><th>Scopes</th><th>Last used</th><th></th></tr></thead><tbody>${keys.map((k) => `
+        <tr><td><code>${esc(k.prefix)}…</code><div class="small muted">${esc(k.name)}</div></td><td>${esc(k.org_name)}</td><td class="small">${esc((Array.isArray(k.scopes) ? k.scopes : []).join(', '))}</td>
+        <td class="small">${k.revoked_at ? '<span class="pill st-disabled">revoked</span>' : esc(ago(k.last_used_at))}</td>
+        <td class="r">${admin && !k.revoked_at ? `<button class="small danger" data-revoke="${esc(k.id)}">Revoke</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No keys yet.</p>')}</div>`);
+    bindForm('#org-form', async (d) => { await api('POST', '/orgs', d); toast('Organisation added'); route(); });
+    bindForm('#key-form', async (d, form) => {
+      const scopes = Object.entries(d).filter(([k]) => k.startsWith('scope_')).map(([, v]) => v);
+      const out = await api('POST', '/apikeys', { orgId: d.orgId, name: d.name, scopes });
+      form.reset();
+      app.querySelector('#key-out').innerHTML = h`<div class="secret">Copy this key now. It won't be shown again.<br><code>${out.key}</code></div>`;
+    });
+    onClick('[data-revoke]', async (d) => { await api('POST', `/apikeys/${d.revoke}/revoke`); toast('Key revoked'); route(); });
+  };
+
+  views.frequency = async () => {
+    const { types } = await api('GET', '/device-types');
+    const admin = me.role === 'admin';
+    layout('frequency', h`<h1>Reporting frequency</h1>
+      <p class="muted">How often each type of device reports, by connection. Saving sends the new settings to every active device of that type. Individual devices can still be overridden on their own page.</p>
+      ${raw(types.map((t) => {
+        const df = t.defaults || {};
+        const field = (net, k) => `<label>${k.replace('_s', '').replace('telemetry', 'Telemetry').replace('moisture', 'Moisture').replace('heartbeat', 'Heartbeat')} (s)<input name="${net}_${k}" inputmode="numeric" value="${esc((df[net] || {})[k] ?? '')}" ${admin ? '' : 'disabled'}></label>`;
+        return `<div class="panel"><h2>${esc(t.name)} <span class="small muted">${t.devices} devices</span></h2>
+          <form class="f freq-form" data-type="${esc(t.id)}">
+            <div class="lbl" style="grid-column:1/-1"><b>Wi-Fi</b></div>${['telemetry_s', 'moisture_s', 'heartbeat_s'].map((k) => field('wifi', k)).join('')}
+            <div class="lbl" style="grid-column:1/-1"><b>GSM</b></div>${['telemetry_s', 'moisture_s', 'heartbeat_s'].map((k) => field('gsm', k)).join('')}
+            ${admin ? '<div><button class="primary" type="submit">Save and send to devices</button></div>' : '<p class="muted small">Only admins can change frequencies.</p>'}
+            <p class="form-msg small" style="grid-column:1/-1"></p></form></div>`;
+      }).join(''))}`);
+    app.querySelectorAll('.freq-form').forEach((form) => form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = formData(form);
+      const pick = (net) => Object.fromEntries(['telemetry_s', 'moisture_s', 'heartbeat_s'].map((k) => [k, d[`${net}_${k}`]]));
+      const msg = form.querySelector('.form-msg');
+      try {
+        const out = await api('POST', `/device-types/${form.dataset.type}`, { wifi: pick('wifi'), gsm: pick('gsm') });
+        msg.className = 'form-msg small ok';
+        msg.textContent = `Saved. Sent to ${out.pushedTo} device(s)${out.failed.length ? `; failed for ${out.failed.join(', ')}` : ''}.`;
+      } catch (err) { msg.className = 'form-msg small err'; msg.textContent = err.message; }
+    }));
+  };
+
+  views.billing = async (_, params) => {
+    const month = params.get('month') || new Date().toISOString().slice(0, 7);
+    const [{ plans }, { usage }, { orgs }] = await Promise.all([api('GET', '/plans'), api('GET', `/usage?month=${month}`), api('GET', '/orgs')]);
+    const admin = me.role === 'admin';
+    layout('billing', h`<h1>Plans & usage</h1>
+      <div class="panel"><h2>Plans</h2>
+        <p class="small muted">Published plans appear on the landing page. With none published it shows "Talk to us about pricing".</p>
+        ${raw(plans.length ? `<div class="scroll"><table><thead><tr><th>Plan</th><th class="r">Per device / month</th><th class="r">Base fee</th><th class="r">API calls included</th><th>Published</th></tr></thead><tbody>${plans.map((p) => `<tr><td>${esc(p.name)} <code class="small">${esc(p.id)}</code></td><td class="r num">${esc(p.currency)} ${Number(p.price_per_device).toLocaleString()}</td><td class="r num">${Number(p.base_fee).toLocaleString()}</td><td class="r num">${Number(p.included_api_calls).toLocaleString()}</td><td>${p.published === true || p.published === 't' ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No plans yet.</p>')}
+        ${raw(admin ? `<h2 style="margin-top:1.2rem">Add or update a plan</h2><form class="f" id="plan-form">
+          <label>Plan ID<input name="id" required placeholder="growth"></label><label>Name<input name="name" required placeholder="Growth"></label>
+          <label>Currency<select name="currency"><option>NGN</option><option>USD</option></select></label>
+          <label>Price per device / month<input name="pricePerDevice" inputmode="decimal" value="0"></label>
+          <label>Base fee / month<input name="baseFee" inputmode="decimal" value="0"></label>
+          <label>API calls included<input name="includedApiCalls" inputmode="numeric" value="100000"></label>
+          <label>Extra per 1,000 calls<input name="overagePer1kCalls" inputmode="decimal" value="0"></label>
+          <label>Order<input name="sort" inputmode="numeric" value="0"></label>
+          <label style="grid-column:1/-1">Features (one per line)<textarea name="features"></textarea></label>
+          <label class="row" style="gap:.4rem"><input type="checkbox" name="published" value="1" style="width:auto"> Show on landing page</label>
+          <div><button class="primary" type="submit">Save plan</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>
+          <h2 style="margin-top:1.2rem">Put an organisation on a plan</h2><form class="f" id="sub-form">
+          <label>Organisation<select name="orgId">${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
+          <label>Plan<select name="planId">${plans.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label>
+          <div><button type="submit" ${plans.length ? '' : 'disabled'}>Save</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>` : '')}
+      </div>
+      <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Usage</h2>
+        <form id="month-form" class="row"><input type="month" name="month" value="${month}" style="width:auto"><button type="submit">Show</button></form></div>
+        <div class="scroll"><table style="margin-top:.75rem"><thead><tr><th>Organisation</th><th class="r">Active devices</th><th class="r">Messages</th><th class="r">Readings</th><th class="r">API calls</th><th class="r">Webhooks</th></tr></thead><tbody>
+        ${raw(usage.map((u) => `<tr><td>${esc(u.name)}</td><td class="r num">${u.active_devices}</td><td class="r num">${Number(u.messages).toLocaleString()}</td><td class="r num">${Number(u.readings).toLocaleString()}</td><td class="r num">${Number(u.api_calls).toLocaleString()}</td><td class="r num">${Number(u.webhooks).toLocaleString()}</td></tr>`).join(''))}
+        </tbody></table></div></div>`);
+    bindForm('#plan-form', async (d) => { await api('POST', '/plans', { ...d, published: d.published === '1' }); toast('Plan saved'); route(); });
+    bindForm('#sub-form', async (d) => { await api('POST', '/subscriptions', d); toast('Plan assigned'); route(); });
+    bindForm('#month-form', async (d) => { location.hash = `#billing?month=${d.month}`; });
+  };
+
+  views.demos = async () => {
+    const { requests } = await api('GET', '/demo-requests');
+    layout('demos', h`<h1>Demo requests</h1><div class="panel">${raw(requests.length ? `<div class="scroll"><table><thead><tr><th>Who</th><th>Wants to monitor</th><th>Message</th><th>When</th></tr></thead><tbody>${requests.map((r) => `
+      <tr><td>${esc(r.name)}<div class="small"><a href="mailto:${esc(r.email)}">${esc(r.email)}</a>${r.phone ? ' · ' + esc(r.phone) : ''}</div><div class="small muted">${esc(r.company ?? '')}</div></td>
+      <td>${esc(r.use_case ?? '')}</td><td class="small">${esc(r.message ?? '')}</td><td class="small">${esc(when(r.created_at))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No demo requests yet.</p>')}</div>`);
+  };
+
+  views.settings = async () => {
+    const admin = me.role === 'admin';
+    const users = admin ? (await api('GET', '/users')).users : [];
+    layout('settings', h`<h1>Settings</h1>
+      <div class="grid2">
+        <div class="panel"><h2>Change your password</h2>
+          <form class="f" id="pw-form"><label>Current password<input name="current" type="password" autocomplete="current-password" required></label>
+          <label>New password<input name="next" type="password" autocomplete="new-password" minlength="10" required></label>
+          <div><button class="primary" type="submit">Change password</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>
+          <p class="small muted">You'll be signed out everywhere and asked to sign in again.</p></div>
+        ${raw(admin ? `<div class="panel"><h2>Team</h2>
+          <form class="f" id="user-form"><label>Email<input name="email" type="email" required></label><label>Name<input name="name"></label>
+          <label>Role<select name="role"><option value="ops">Ops</option><option value="admin">Admin</option></select></label>
+          <div><button type="submit">Add person</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="user-out"></div>
+          <table style="margin-top:1rem"><tbody>${users.map((u) => `<tr><td>${esc(u.email)}<div class="small muted">${esc(u.name ?? '')}</div></td><td>${esc(u.role)}</td><td class="small">last sign-in ${esc(ago(u.last_login_at))}</td></tr>`).join('')}</tbody></table></div>` : '')}
+      </div>`);
+    bindForm('#pw-form', async (d) => { await api('POST', '/password', d); me = null; renderLogin(); toast('Password changed. Sign in again.'); });
+    bindForm('#user-form', async (d, form) => {
+      const out = await api('POST', '/users', d);
+      form.reset();
+      app.querySelector('#user-out').innerHTML = h`<div class="secret">${out.email} can sign in with temporary password <code>${out.temporaryPassword}</code>. Ask them to change it under Settings.</div>`;
+    });
+  };
+
+  // ---------- router ----------
+  async function route() {
+    if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
+    const [path, qs] = (location.hash.slice(1) || 'overview').split('?');
+    const params = new URLSearchParams(qs || '');
+    const m = /^(site|device)-(.+)$/.exec(path);
+    try {
+      if (m) await views[m[1]](decodeURIComponent(m[2]), params);
+      else await (views[path] || views.overview)(null, params);
+    } catch (e) {
+      if (me) toast(e.message);
+    }
+  }
+  window.addEventListener('hashchange', route);
+  route();
+  setInterval(() => { if (me && (location.hash === '' || location.hash === '#overview')) route(); }, 30_000);
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,7 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 - [Device Protocol v1](docs/device-protocol-v1.md): for hardware engineers
 - [Product requirements](docs/PRD.md)
 - [Deployment](docs/deployment.md)
+- API docs: `web/docs/index.html`, served at `/docs/`
 
 ## What's built (v1, stage 1)
 
@@ -26,8 +27,10 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 | Usage metering, invoice generation, Paystack payments | Done |
 | Landing page (`web/index.html`) with demo form | Done |
 | Admin CLI for bootstrapping (`npm run cli`) | Done |
-| Admin/Ops dashboard | Next |
-| Client console + API docs page | Next |
+| StorageX condition reports (`/v1/sites/:id/conditions`) and lookup by StorageX ID | Done |
+| API docs with StorageX guide (`/docs/`) | Done |
+| Admin/Ops dashboard (`/admin`): fleet, sites, devices, charts, config, commands, alerts, rules, contacts, keys, reporting frequency, plans, usage, team | Done |
+| Client console for outside organisations | Next |
 
 ## Develop
 

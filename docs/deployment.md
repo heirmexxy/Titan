@@ -57,7 +57,15 @@ Install EMQX 5 (open-source) from the official `.deb` for your Ubuntu version an
 
 Renew hook: after certbot renews, reload EMQX so it picks up the new cert.
 
-## Step 6. First devices (until the admin dashboard ships)
+## Step 6. First admin account
+
+```bash
+npm run cli -- user:create e.nwachinemere@kitovu.com.ng admin --name "Emeka"
+```
+
+Sign in at `https://titan.kitovu.com.ng/admin` with the temporary password and change it under Settings. Everything below can also be done in the dashboard.
+
+## Step 7. First devices from the command line (optional)
 
 ```bash
 cd /opt/titan
@@ -71,7 +79,7 @@ npm run cli -- rule:create <orgId> air.humidity gt 75 --duration 600 --hysteresi
 npm run cli -- apikey:create <orgId> "StorageX" --scopes read:readings,read:alerts,manage:webhooks,manage:grants
 ```
 
-## Step 7. Backups
+## Step 8. Backups
 
 Nightly `pg_dump -Fc titan` to a file, then upload to Google Drive (e.g. with `rclone`). Keep 30 days.
 

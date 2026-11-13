@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { config } from './config.js';
+import { registerAdmin } from './admin/routes.js';
 import { Billing } from './billing/billing.js';
 import { createApp } from './http/app.js';
 import { DeviceService, EmqxBroker } from './ingest/devices.js';
@@ -29,6 +30,8 @@ const app = createApp({
   mqtt: config.mqtt,
   staticDir,
 });
+
+registerAdmin(app, { pool: store.pool, devices, secureCookies: config.publicUrl.startsWith('https') });
 
 const server = createServer(app.handler());
 server.listen(config.port, '127.0.0.1', () => {

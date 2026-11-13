@@ -13,6 +13,7 @@ export class MemoryStore implements Store {
   devices = new Map<string, Device>();
   keys = new Map<string, DeviceKeyRecord>();
   metrics = new Map<string, Metric>();
+  stackRefs: { siteId: string; zone: string; stack: string; ref: string }[] = [];
   zoneCrops = new Map<string, Map<string, { stack: string; crop: CropProfile }[]>>();
   messages = new Map<string, MessageRow>();
   readings: ReadingRow[] = [];
@@ -107,6 +108,13 @@ export class MemoryStore implements Store {
   }
   async listAlerts(siteIds: string[], status: string | null, limit: number) {
     return this.alerts.filter((a) => a.siteId && siteIds.includes(a.siteId) && (!status || a.status === status)).slice(-limit).reverse();
+  }
+  async listAlertsBetween(siteId: string, from: Date, to: Date) {
+    return this.alerts.filter((a) => a.siteId === siteId && a.openedAt <= to && (!a.resolvedAt || a.resolvedAt >= from));
+  }
+  async findStackByRef(siteIds: string[], ref: string) {
+    const s = this.stackRefs.find((x) => x.ref === ref && siteIds.includes(x.siteId));
+    return s ? { siteId: s.siteId, zone: s.zone, stack: s.stack } : null;
   }
   async listContacts(orgId: string) { return this.contacts.get(orgId) ?? []; }
 

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titan API v1 documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #14213D; --soft: #4A5875; --paper: #EEF2F0; --mist: #D5DEDA; --grain: #E2B23A; --leaf: #2F7D5B; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Archivo', system-ui, sans-serif; color: var(--ink); background: #fff; line-height: 1.6; font-size: 16px; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--grain); outline-offset: 2px; }
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+  nav.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 1.5rem 1rem; border-right: 1px solid var(--mist); font-size: .92rem; }
+  nav.toc .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 1.3rem; text-decoration: none; display: block; margin-bottom: 1rem; }
+  nav.toc a { display: block; padding: .2rem 0; text-decoration: none; color: var(--soft); }
+  nav.toc a:hover { color: var(--ink); text-decoration: underline; }
+  nav.toc .g { margin-top: 1rem; font-weight: 700; color: var(--ink); }
+  main { padding: 2rem 2.5rem 4rem; min-width: 0; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--mist); } main { padding: 1.25rem; } }
+  h1 { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: clamp(2rem, 4vw, 2.8rem); line-height: 1.05; margin: 0 0 1rem; letter-spacing: -0.02em; }
+  h2 { font-variation-settings: 'wdth' 118; font-weight: 800; font-size: 1.6rem; margin: 3rem 0 .75rem; padding-top: 1rem; border-top: 3px solid var(--ink); }
+  h3 { font-variation-settings: 'wdth' 108; font-weight: 700; font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  p, li { max-width: 72ch; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .88em; background: var(--paper); padding: .05rem .3rem; border-radius: 4px; }
+  pre { background: var(--ink); color: #DCE6E2; padding: 1rem 1.2rem; border-radius: 8px; overflow-x: auto; font-size: .85rem; line-height: 1.55; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: .75rem 0 1rem; font-size: .93rem; }
+  th, td { text-align: left; padding: .5rem .75rem .5rem 0; border-bottom: 1px solid var(--mist); vertical-align: top; }
+  th { color: var(--soft); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .ep { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; margin: 2rem 0 .4rem; }
+  .ep .m { font-weight: 800; font-variation-settings: 'wdth' 80; background: var(--ink); color: #fff; padding: .05rem .5rem; border-radius: 4px; font-size: .85rem; }
+  .ep .m.post { background: var(--leaf); }
+  .ep .m.del { background: #C8462F; }
+  .ep code { font-size: 1rem; background: none; padding: 0; font-weight: 600; }
+  .ep .scope { font-size: .85rem; color: var(--soft); }
+  .note { background: #FBF0D5; border-left: 4px solid var(--grain); padding: .75rem 1rem; border-radius: 0 6px 6px 0; max-width: 72ch; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <a class="brand" href="/">Titan</a>
+    <a href="#start">Getting started</a>
+    <a href="#auth">Authentication</a>
+    <a href="#storagex">StorageX integration</a>
+    <div class="g">Reading data</div>
+    <a href="#sites">Sites</a>
+    <a href="#conditions">Storage conditions</a>
+    <a href="#devices">Devices</a>
+    <a href="#latest">Latest readings</a>
+    <a href="#readings">Reading history</a>
+    <a href="#proof">Reading proofs</a>
+    <a href="#alerts">Alerts</a>
+    <a href="#metrics">Metric registry</a>
+    <div class="g">Push and sharing</div>
+    <a href="#webhooks">Webhooks</a>
+    <a href="#grants">Sharing data (grants)</a>
+    <div class="g">Reference</div>
+    <a href="#errors">Errors and limits</a>
+    <a href="/docs/device-protocol-v1.md">Device protocol</a>
+  </nav>
+
+  <main>
+    <h1 id="start">Titan API v1</h1>
+    <p>The Titan API gives your systems the readings, alerts and storage-condition history from sites you own or that have been shared with you. Every reading Titan stores was signed by the device that took it.</p>
+    <p>Base URL: <code>https://titan.kitovu.com.ng/v1</code>. All responses are JSON. Times are ISO 8601 in UTC.</p>
+
+    <h2 id="auth">Authentication</h2>
+    <p>Send your API key as a bearer token on every request. Keys are issued by Kitovu from the Titan admin panel and are shown once.</p>
+<pre><code>curl https://titan.kitovu.com.ng/v1/sites \
+  -H "Authorization: Bearer tk_live_…"</code></pre>
+    <p>Each key carries scopes:</p>
+    <div class="scroll"><table>
+      <tr><th>Scope</th><th>Allows</th></tr>
+      <tr><td><code>read:readings</code></td><td>Latest readings, history, condition reports and proofs</td></tr>
+      <tr><td><code>read:alerts</code></td><td>Listing alerts</td></tr>
+      <tr><td><code>manage:webhooks</code></td><td>Creating and deleting webhook subscriptions</td></tr>
+      <tr><td><code>manage:grants</code></td><td>Sharing your own sites with other organisations</td></tr>
+    </table></div>
+
+    <h2 id="storagex">StorageX integration</h2>
+    <p>StorageX uses Titan to show the condition of the stock behind each warehouse receipt.</p>
+    <h3>1. Link the IDs once</h3>
+    <p>When a warehouse is set up in Titan, its StorageX warehouse ID is saved as the site's <b>external ID</b>, and each StorageX lot ID is saved on the matching <b>stack</b>. Device channels name the zone and stack, for example <code>z1/stack-a/mst1</code>.</p>
+    <h3>2. Find the Titan site for a warehouse</h3>
+<pre><code>GET /v1/sites?ref=SX-WH-001</code></pre>
+    <h3>3. Subscribe to alerts</h3>
+<pre><code>POST /v1/webhooks
+{ "url": "https://storagex.kitovu.com.ng/hooks/titan", "events": ["alert.*", "device.offline"] }</code></pre>
+    <p>When an alert opens on a stack, flag the lots and receipts stored there. Store the returned <code>secret</code> to verify each delivery.</p>
+    <h3>4. Attach a condition report to a receipt</h3>
+<pre><code>GET /v1/sites/{siteId}/conditions?lot=LOT-2026-114&amp;from=2026-10-01T00:00:00Z&amp;to=2026-11-13T00:00:00Z</code></pre>
+    <p>Use the receipt's storage period as <code>from</code> and <code>to</code>. Show lenders the min, max and average for each reading, the alerts during the period, data completeness, and whether moisture went above the crop's safe level.</p>
+    <h3>5. Show live conditions</h3>
+<pre><code>GET /v1/latest?site={siteId}</code></pre>
+    <h3>Third-party warehouses and lenders</h3>
+    <p>For a warehouse owned by another organisation, the owner grants StorageX access (see <a href="#grants">grants</a>). The same calls then work for that site. A lender such as a microfinance bank can be given its own key and a grant covering only the warehouses it finances.</p>
+
+    <h2 id="sites">Sites</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/sites</code></div>
+    <p>Sites you own or that are shared with you. Optional <code>ref</code> filters by external ID. Each site includes <code>access</code>: whether you own it, and which readings and dates you can see.</p>
+<pre><code>{ "sites": [ { "id": "2f76d7b6-…", "name": "Iseyin Warehouse 1", "kind": "warehouse", "externalRef": "SX-WH-001",
+    "lat": 7.97, "lng": 3.59, "access": { "owned": true, "metrics": "all", "from": null, "to": null } } ] }</code></pre>
+    <div class="ep"><span class="m">GET</span><code>/v1/sites/{id}</code></div>
+    <p>One site and its devices.</p>
+
+    <h2 id="conditions">Storage conditions</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/sites/{id}/conditions</code><span class="scope">read:readings</span></div>
+    <p>A summary of conditions over a period, for the whole site, a zone or one stack.</p>
+    <div class="scroll"><table>
+      <tr><th>Parameter</th><th>Meaning</th></tr>
+      <tr><td><code>from</code>, <code>to</code></td><td>Period, default the last 30 days. Up to 366 days.</td></tr>
+      <tr><td><code>lot</code></td><td>StorageX lot ID (external ID of a stack)</td></tr>
+      <tr><td><code>stack</code></td><td>Or the zone and stack code directly, e.g. <code>z1/stack-a</code>. Use just <code>z1</code> for a zone.</td></tr>
+    </table></div>
+    <p>For a stack, the report includes that stack's produce readings plus the zone's air readings. Periods up to 92 days are summarised by hour, longer ones by day; <code>completeness</code> is the share of those hours or days that have data.</p>
+<pre><code>{
+  "site": { "id": "…", "name": "Iseyin Warehouse 1", "externalRef": "SX-WH-001" },
+  "from": "2026-10-01T00:00:00.000Z", "to": "2026-11-13T00:00:00.000Z",
+  "scope": { "zone": "z1", "stack": "stack-a" }, "bucket": "1h", "completeness": 0.98,
+  "metrics": [
+    { "metric": "air.humidity", "channel": "z1/dht22", "min": 58.2, "max": 76.4, "avg": 67.9, "readings": 371520, … },
+    { "metric": "produce.moisture", "channel": "z1/stack-a/mst1", "min": 12.4, "max": 13.1, "avg": 12.8, … }
+  ],
+  "alerts": { "total": 1, "critical": 0, "byCode": { "threshold": 1 }, "items": [ … ] },
+  "integrity": { "unverifiedMessagesRejected": 0, "note": "…" },
+  "crop": { "crop": "maize", "safeMoisture": 13, "maxMoisture": 13.1, "exceededSafeMoisture": true }
+}</code></pre>
+
+    <h2 id="devices">Devices</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/devices?site={id}</code></div>
+    <div class="ep"><span class="m">GET</span><code>/v1/devices/{deviceId}</code></div>
+    <p>Status is <code>online</code>, <code>offline</code>, <code>registered</code> (not yet connected) or <code>disabled</code>. <code>configAcked</code> is false while a new configuration is waiting for the device.</p>
+
+    <h2 id="latest">Latest readings</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/latest?site={id}</code><span class="scope">read:readings</span></div>
+    <p>The most recent value of every reading on every channel in the last 7 days.</p>
+
+    <h2 id="readings">Reading history</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/readings</code><span class="scope">read:readings</span></div>
+    <div class="scroll"><table>
+      <tr><th>Parameter</th><th>Meaning</th></tr>
+      <tr><td><code>site</code> or <code>device</code></td><td>Limit to one site or device. Without either, all visible sites.</td></tr>
+      <tr><td><code>metric</code></td><td>One or more metric keys, comma separated, e.g. <code>air.temperature,produce.moisture</code></td></tr>
+      <tr><td><code>channel</code></td><td>One channel, e.g. <code>z1/stack-a/mst1</code></td></tr>
+      <tr><td><code>from</code>, <code>to</code></td><td>Default: the last 24 hours. Up to 366 days.</td></tr>
+      <tr><td><code>interval</code></td><td><code>raw</code> (default), <code>1m</code>, <code>1h</code> or <code>1d</code>. Aggregates return <code>avg</code>, <code>min</code>, <code>max</code> and <code>count</code>.</td></tr>
+      <tr><td><code>limit</code></td><td>Up to 50,000 rows, default 10,000</td></tr>
+    </table></div>
+    <p>Raw readings carry labels you should respect:</p>
+    <div class="scroll"><table>
+      <tr><th>Field</th><th>Meaning</th></tr>
+      <tr><td><code>quality</code></td><td><code>ok</code>, <code>suspect</code> or <code>fault</code> as reported by the device. Out-of-range values are never returned.</td></tr>
+      <tr><td><code>buffered</code></td><td>Taken during a connection outage and sent later, with the original time</td></tr>
+      <tr><td><code>timeEstimated</code></td><td>The device clock was not set; Titan estimated the time</td></tr>
+      <tr><td><code>derived</code></td><td>Calculated by Titan (dew point, equilibrium moisture, VPD)</td></tr>
+      <tr><td><code>integrity</code></td><td><code>device-signed</code> (Ed25519), <code>shared-secret</code> (approved third-party devices), or <code>derived</code></td></tr>
+      <tr><td><code>seq</code></td><td>The device message number; use it to fetch a proof</td></tr>
+    </table></div>
+
+    <h2 id="proof">Reading proofs</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/readings/proof?device={id}&amp;seq={seq}</code><span class="scope">read:readings</span></div>
+    <p>Returns the original signed message, the device's public key and Titan's own check. Anyone can verify it independently:</p>
+<pre><code>import { createPublicKey, verify } from 'node:crypto';
+const raw = Buffer.from(proof.publicKey, 'base64url');                      // 32-byte Ed25519 key
+const key = createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw]), format: 'der', type: 'spki' });
+const ok = verify(null, Buffer.from(proof.payload, 'base64url'), key, Buffer.from(proof.signature, 'base64url'));</code></pre>
+
+    <h2 id="alerts">Alerts</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/alerts?site={id}&amp;status=open</code><span class="scope">read:alerts</span></div>
+    <p><code>status</code> is <code>open</code>, <code>acknowledged</code> or <code>resolved</code>. Codes include <code>threshold</code>, <code>device_offline</code>, <code>tamper</code>, <code>intruder_detected</code>, <code>door_opened</code>, <code>sensor_error</code> and <code>power_lost</code>.</p>
+
+    <h2 id="metrics">Metric registry</h2>
+    <div class="ep"><span class="m">GET</span><code>/v1/metrics</code></div>
+    <p>Every metric key with its unit, label and valid range, e.g. <code>air.temperature</code> (°C), <code>produce.moisture</code> (% wet basis), <code>water.do</code> (mg/L).</p>
+
+    <h2 id="webhooks">Webhooks</h2>
+    <div class="ep"><span class="m post">POST</span><code>/v1/webhooks</code><span class="scope">manage:webhooks</span></div>
+<pre><code>{ "url": "https://example.com/titan", "events": ["alert.opened", "alert.resolved"] }</code></pre>
+    <p>Events: <code>alert.opened</code>, <code>alert.resolved</code>, <code>alert.*</code>, <code>device.online</code>, <code>device.offline</code>, <code>device.*</code>, <code>event.created</code>, <code>reading.created</code>. The URL must be HTTPS. The response includes a <code>secret</code>, shown once.</p>
+    <div class="ep"><span class="m">GET</span><code>/v1/webhooks</code></div>
+    <div class="ep"><span class="m del">DELETE</span><code>/v1/webhooks/{id}</code></div>
+    <h3>Deliveries</h3>
+    <p>Titan POSTs <code>{ "event", "created_at", "data" }</code> with headers <code>X-Titan-Event</code> and <code>X-Titan-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code>. Reply with any 2xx within 10 seconds. Failed deliveries are retried 5 more times over about 30 minutes.</p>
+<pre><code>import { createHmac, timingSafeEqual } from 'node:crypto';
+function verifyTitan(rawBody, header, secret) {
+  const { t, v1 } = Object.fromEntries(header.split(',').map((p) => p.split('=')));
+  if (Math.abs(Date.now() / 1000 - Number(t)) > 300) return false;          // reject old deliveries
+  const expected = createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex');
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
+}</code></pre>
+
+    <h2 id="grants">Sharing data (grants)</h2>
+    <p>The owner of a site decides who else can see it. A grant names the organisation, the sites, the readings and the period. Grants can be revoked at any time and every read is logged.</p>
+    <div class="ep"><span class="m post">POST</span><code>/v1/grants</code><span class="scope">manage:grants</span></div>
+<pre><code>{ "granteeOrgId": "…", "siteIds": ["…"], "metrics": ["produce.moisture", "air.humidity", "air.temperature"],
+  "validFrom": "2026-11-01T00:00:00Z", "validTo": "2027-05-01T00:00:00Z", "live": true }</code></pre>
+    <p>Leave <code>siteIds</code> or <code>metrics</code> out to share all. <code>live</code> lets the grantee receive webhooks for those sites.</p>
+    <div class="ep"><span class="m">GET</span><code>/v1/grants</code></div>
+    <p>Grants you have given and received.</p>
+    <div class="ep"><span class="m del">DELETE</span><code>/v1/grants/{id}</code></div>
+
+    <h2 id="errors">Errors and limits</h2>
+    <p>Errors return <code>{ "error": "code", "message": "…" }</code> with the matching HTTP status: 400 bad request, 401 missing or invalid key, 403 missing scope, 404 not found or not visible to you, 429 rate limited.</p>
+    <p class="note">Each key may make 600 requests per minute. For live data, use webhooks rather than polling.</p>
+  </main>
+</div>
+</body>
+</html>

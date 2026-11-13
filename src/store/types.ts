@@ -212,6 +212,10 @@ export interface Store {
   resolveAlert(id: string, at: Date): Promise<Alert | null>;
   findOpenAlert(orgId: string, deviceId: string, code: string, channel: string | null): Promise<Alert | null>;
   listAlerts(siteIds: string[], status: string | null, limit: number): Promise<Alert[]>;
+  /** Alerts on a site that were open at any point in [from, to]. */
+  listAlertsBetween(siteId: string, from: Date, to: Date): Promise<Alert[]>;
+  /** Finds a stack by its external reference (e.g. StorageX lot ID) among the given sites. */
+  findStackByRef(siteIds: string[], ref: string): Promise<{ siteId: string; zone: string; stack: string } | null>;
   listContacts(orgId: string): Promise<Contact[]>;
 
   // Sharing & API

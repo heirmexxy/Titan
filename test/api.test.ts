@@ -114,6 +114,25 @@ test('owner reads sites, latest values, history and proofs', async () => {
   assert.equal(proof.json.body.dev, device.id);
 });
 
+test('StorageX: find warehouse by reference and get a receipt condition report for a lot', async () => {
+  store.stackRefs.push({ siteId: SITE, zone: 'z1', stack: 'stack-a', ref: 'LOT-77' });
+  const byRef = await call('GET', '/v1/sites?ref=SX-1', { key: OWNER_KEY });
+  assert.equal(byRef.json.sites[0].id, SITE);
+  assert.equal((await call('GET', '/v1/sites?ref=nope', { key: OWNER_KEY })).json.sites.length, 0);
+  const from = new Date(Date.now() - 3 * 3600_000).toISOString();
+  const rep = await call('GET', `/v1/sites/${SITE}/conditions?lot=LOT-77&from=${from}`, { key: OWNER_KEY });
+  assert.equal(rep.status, 200);
+  assert.deepEqual(rep.json.scope, { zone: 'z1', stack: 'stack-a' });
+  assert.equal(rep.json.bucket, '1h');
+  const moisture = rep.json.metrics.find((m: any) => m.metric === 'produce.moisture');
+  assert.equal(moisture.max, 13.1);
+  assert.ok(rep.json.metrics.find((m: any) => m.metric === 'air.temperature'), 'zone-level air readings included');
+  assert.equal(rep.json.crop.crop, 'maize');
+  assert.equal(rep.json.crop.exceededSafeMoisture, true);
+  assert.ok(rep.json.completeness > 0);
+  assert.equal((await call('GET', `/v1/sites/${SITE}/conditions?lot=missing`, { key: OWNER_KEY })).status, 404);
+});
+
 test('grants: lender sees only granted metrics, revocation removes access', async () => {
   assert.equal((await call('GET', '/v1/sites', { key: LENDER_KEY })).json.sites.length, 0);
   assert.equal((await call('GET', `/v1/readings?site=${SITE}`, { key: LENDER_KEY })).status, 404);

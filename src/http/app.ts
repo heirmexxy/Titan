@@ -1,4 +1,5 @@
 import { clampQuery, resolveAccess, type SiteAccess } from '../core/access.js';
+import { buildConditionReport } from '../core/conditions.js';
 import { b64urlDecode, randomToken, safeEqual, sha256Hex, verifyEd25519, verifyHmacSha256 } from '../core/crypto.js';
 import { MESSAGE_KINDS, parseUplinkTopic, type MessageKind } from '../core/envelope.js';
 import type { Billing } from '../billing/billing.js';
@@ -173,7 +174,8 @@ export function createApp(d: AppDeps): Router {
   r.get('/v1/sites', async (req) => {
     const key = await apiKey(req);
     const access = await resolveAccess(d.store, key.orgId);
-    const sites = await d.store.getSites([...access.keys()]);
+    const ref = req.query.get('ref');
+    const sites = (await d.store.getSites([...access.keys()])).filter((s) => !ref || s.externalRef === ref);
     return { body: { sites: sites.map((s) => ({ ...s, access: describeAccess(access.get(s.id)!) })) } };
   });
 
@@ -184,6 +186,52 @@ export function createApp(d: AppDeps): Router {
     const [site] = await d.store.getSites([req.params.id]);
     const devices = await d.store.listDevices([req.params.id]);
     return { body: { site: { ...site, access: describeAccess(a) }, devices: devices.map(publicDevice) } };
+  });
+
+  // Storage-condition summary for a site, zone or stack over a period, e.g. a warehouse receipt's storage period.
+  r.get('/v1/sites/:id/conditions', async (req) => {
+    const key = await apiKey(req, 'read:readings');
+    const access = await resolveAccess(d.store, key.orgId);
+    const siteId = req.params.id;
+    const a = siteAccess(access, siteId);
+    const to = parseDate(req.query.get('to'), new Date());
+    const from = parseDate(req.query.get('from'), new Date(to.getTime() - 30 * 86_400_000));
+    if (from >= to) throw new HttpError(400, 'invalid_range', 'from must be before to');
+    if (to.getTime() - from.getTime() > 366 * 86_400_000) throw new HttpError(400, 'range_too_large', 'Maximum range is 366 days');
+
+    let zone: string | null = null;
+    let stack: string | null = null;
+    const lot = req.query.get('lot');
+    const stackParam = req.query.get('stack') ?? req.query.get('zone');
+    if (lot) {
+      const found = await d.store.findStackByRef([siteId], lot);
+      if (!found) throw new HttpError(404, 'lot_not_found', `No stack on this site has reference ${lot}`);
+      ({ zone, stack } = found);
+    } else if (stackParam) {
+      const [z, st] = stackParam.split('/');
+      zone = z || null;
+      stack = st || null;
+    }
+
+    const c = clampQuery(a, from, to);
+    const bucket = to.getTime() - from.getTime() > 92 * 86_400_000 ? '1d' : '1h';
+    const rows = c
+      ? ((await d.store.queryReadings({ siteIds: [siteId], metrics: c.metrics, from: c.from, to: c.to, interval: bucket, limit: 200_000 })) as any[])
+      : [];
+    const alerts = await d.store.listAlertsBetween(siteId, from, to);
+    let crop = null;
+    if (zone && stack) {
+      const zc = (await d.store.getZoneCrops(siteId)).get(zone)?.find((x) => x.stack === stack);
+      if (zc) crop = { crop: zc.crop.crop, safeMoisture: zc.crop.safeMoisture };
+    }
+    const [site] = await d.store.getSites([siteId]);
+    return {
+      body: {
+        site: { id: site.id, name: site.name, externalRef: site.externalRef },
+        ...buildConditionReport(rows, alerts, { from: c?.from ?? from, to: c?.to ?? to, bucket, zone, stack, crop }),
+        access: describeAccess(a),
+      },
+    };
   });
 
   r.get('/v1/devices', async (req) => {

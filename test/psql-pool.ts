@@ -27,6 +27,16 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
+/** Best-effort typing of psql text output: JSON documents and Postgres arrays. Numbers and booleans stay strings. */
+function convert(v: string | undefined): unknown {
+  if (v === undefined || v === '') return null;
+  if (v.startsWith('{') || v.startsWith('[')) {
+    try { return JSON.parse(v); } catch { /* not JSON */ }
+    if (v.startsWith('{') && v.endsWith('}')) return v.slice(1, -1).split(',').filter(Boolean).map((x) => x.replace(/^"|"$/g, ''));
+  }
+  return v;
+}
+
 export class PsqlPool {
   constructor(private args: string[]) {}
   async query(text: string, values: unknown[] = []) {
@@ -38,7 +48,7 @@ export class PsqlPool {
     const tag = /^(INSERT \d+|UPDATE|DELETE) (\d+)$/.exec(last);
     if (tag) { rowCount = Number(tag[2]); lines.pop(); }
     const [header, ...data] = lines;
-    const rows: any[] = header ? data.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] === '' ? null : r[i]]))) : [];
+    const rows: any[] = header ? data.map((r) => Object.fromEntries(header.map((h, i) => [h, convert(r[i])]))) : [];
     return { rows, rowCount: rowCount ?? rows.length };
   }
   async end() {}

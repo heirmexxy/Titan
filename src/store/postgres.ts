@@ -200,6 +200,20 @@ export class PostgresStore implements Store {
       [siteIds, status, limit]);
     return r.rows.map(alertRow);
   }
+  async listAlertsBetween(siteId: string, from: Date, to: Date) {
+    const r = await this.q(
+      `SELECT * FROM alerts WHERE site_id = $1 AND opened_at <= $3 AND (resolved_at IS NULL OR resolved_at >= $2) ORDER BY opened_at`,
+      [siteId, from, to]);
+    return r.rows.map(alertRow);
+  }
+  async findStackByRef(siteIds: string[], ref: string) {
+    if (!siteIds.length) return null;
+    const r = await this.q(
+      `SELECT z.site_id, z.code AS zone, st.code AS stack FROM stacks st JOIN zones z ON z.id = st.zone_id
+       WHERE st.external_ref = $1 AND z.site_id = ANY($2::uuid[]) LIMIT 1`, [ref, siteIds]);
+    const x = r.rows[0];
+    return x ? { siteId: x.site_id, zone: x.zone, stack: x.stack } : null;
+  }
   async listContacts(orgId: string): Promise<Contact[]> {
     const r = await this.q(`SELECT channel, address, min_severity, site_id FROM notification_contacts WHERE org_id = $1`, [orgId]);
     return r.rows.map((c: any) => ({ channel: c.channel, address: c.address, minSeverity: c.min_severity, siteId: c.site_id }));

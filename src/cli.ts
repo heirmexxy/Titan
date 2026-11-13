@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { config } from './config.js';
 import { randomToken, sha256Hex } from './core/crypto.js';
 import { Billing } from './billing/billing.js';
+import { hashPassword } from './admin/auth.js';
 import { DeviceService, EmqxBroker } from './ingest/devices.js';
 import { PostgresStore } from './store/postgres.js';
 
@@ -68,6 +69,15 @@ const commands: Record<string, () => Promise<unknown>> = {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
       [args[0], args[1], args[2], Number(args[3]), values.site ?? null, values.device ?? null, values.channel ?? null,
         Number(values.duration ?? 0), Number(values.hysteresis ?? 0), values.severity ?? 'warning', values.name ?? null])).rows[0];
+  },
+  async 'user:create'() {
+    need(2, 'user:create <email> admin|ops [--name "Full Name"]  (prints a temporary password)');
+    if (!['admin', 'ops'].includes(args[1])) throw new Error('role must be admin or ops');
+    const org = (await q(`SELECT id FROM organisations WHERE kind = 'kitovu' LIMIT 1`)).rows[0];
+    const password = randomToken(12);
+    await q(`INSERT INTO users (org_id, email, name, role, password_hash) VALUES ($1,$2,$3,$4,$5)`,
+      [org.id, args[0].toLowerCase(), values.name ?? null, args[1], await hashPassword(password)]);
+    return { email: args[0], role: args[1], temporaryPassword: password, note: 'Sign in at /admin and change it under Settings.' };
   },
   async 'invoices:generate'() {
     need(1, 'invoices:generate <YYYY-MM>');

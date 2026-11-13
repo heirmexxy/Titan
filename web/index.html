@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titan by Kitovu: connect, verify and share data from any IoT device</title>
+<meta name="description" content="Titan connects warehouse, farm, water and power sensors to one platform. Every reading is signed by the device that took it, so your team, your systems and your lenders can trust it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14213D;
+    --ink-soft: #3B4A66;
+    --paper: #EEF2F0;
+    --panel: #FFFFFF;
+    --mist: #C9D4D0;
+    --grain: #E2B23A;
+    --leaf: #2F7D5B;
+    --alert: #C8462F;
+    --wide: 'Archivo', system-ui, sans-serif;
+    --measure: 64ch;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--wide); font-variation-settings: 'wdth' 100; font-size: 1.0625rem; line-height: 1.6;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--grain); outline-offset: 3px; }
+  .wrap { width: min(1160px, 100% - 2.5rem); margin-inline: auto; }
+
+  /* Type: one family, width does the talking. Expanded for display, condensed for data. */
+  .display { font-variation-settings: 'wdth' 125; font-weight: 800; letter-spacing: -0.02em; line-height: 0.98; }
+  .data { font-variation-settings: 'wdth' 62; font-weight: 500; font-feature-settings: 'tnum'; }
+  h1 { font-size: clamp(2.6rem, 6.4vw, 5.2rem); margin: 0 0 1.25rem; }
+  h2 { font-size: clamp(1.9rem, 3.8vw, 3rem); margin: 0 0 1rem; max-width: 22ch; }
+  h3 { font-size: 1.2rem; margin: 0 0 .4rem; font-variation-settings: 'wdth' 112; font-weight: 700; }
+  p { margin: 0 0 1rem; max-width: var(--measure); }
+  .lede { font-size: 1.2rem; color: var(--ink-soft); max-width: 46ch; }
+
+  /* Header */
+  header.top { padding: 1.1rem 0; }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .brand { display: flex; align-items: baseline; gap: .5rem; text-decoration: none; }
+  .brand b { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; }
+  .brand span { font-size: .9rem; color: var(--ink-soft); }
+  nav.top a { text-decoration: none; margin-left: 1.25rem; font-size: .95rem; }
+  nav.top a:hover { text-decoration: underline; }
+  @media (max-width: 720px) { nav.top .hide-sm { display: none; } }
+
+  .btn {
+    display: inline-block; padding: .85rem 1.3rem; border-radius: 6px; text-decoration: none; font-weight: 700;
+    border: 2px solid var(--ink); cursor: pointer; font: inherit; font-weight: 700;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); }
+  .btn-primary:hover { background: var(--ink-soft); border-color: var(--ink-soft); }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-ghost:hover { background: var(--panel); }
+
+  /* Hero */
+  .hero { padding: 3.5rem 0 4.5rem; }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr 1fr; gap: 3rem; align-items: center; }
+  @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } .hero { padding-top: 1.5rem; } }
+  .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.75rem; }
+
+  /* The one memorable thing: a live feed of signed readings from very different sites. */
+  .feed { background: var(--ink); color: var(--paper); border-radius: 14px; padding: 1.1rem 1.1rem .6rem; box-shadow: 0 30px 60px -30px rgba(20,33,61,.55); }
+  .feed-head { display: flex; justify-content: space-between; align-items: center; font-size: .85rem; color: #AFC0BA; margin-bottom: .6rem; }
+  .pulse { display: inline-flex; align-items: center; gap: .45rem; }
+  .pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--leaf); box-shadow: 0 0 0 0 rgba(47,125,91,.7); animation: ping 2s infinite; }
+  @keyframes ping { 70% { box-shadow: 0 0 0 8px rgba(47,125,91,0); } 100% { box-shadow: 0 0 0 0 rgba(47,125,91,0); } }
+  .feed ol { list-style: none; margin: 0; padding: 0; }
+  .row {
+    display: grid; grid-template-columns: 1fr auto; gap: .15rem 1rem; padding: .7rem .2rem; border-top: 1px solid rgba(201,212,208,.18);
+  }
+  .row .where { font-size: .95rem; }
+  .row .what { font-size: .82rem; color: #AFC0BA; }
+  .row .val { font-size: 1.7rem; line-height: 1; text-align: right; grid-row: span 2; align-self: center; }
+  .row .val small { font-size: .85rem; color: #AFC0BA; margin-left: .15rem; }
+  .row .sig { grid-column: 1 / -1; font-size: .78rem; color: #8FD3AE; }
+  .row.warn .val { color: var(--grain); }
+  .row.warn .sig { color: var(--grain); }
+  .row.enter { animation: drop .6s ease-out; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .row.enter, .pulse i { animation: none; } }
+
+  /* Sections */
+  section { padding: 4.5rem 0; }
+  section.band { background: var(--panel); border-block: 1px solid var(--mist); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+  .split > *, .hero .wrap > * { min-width: 0; }
+  @media (max-width: 860px) { .split { grid-template-columns: 1fr; gap: 1.5rem; } }
+
+  .pains { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 2rem; }
+  @media (max-width: 860px) { .pains { grid-template-columns: 1fr; } }
+  .pains div { border-top: 3px solid var(--ink); padding-top: 1rem; }
+  .pains p { color: var(--ink-soft); }
+
+  .guide-products { display: grid; gap: 1rem; }
+  .product { background: var(--paper); border-left: 4px solid var(--grain); padding: 1.1rem 1.25rem; border-radius: 0 8px 8px 0; }
+  .product p { margin: 0; color: var(--ink-soft); }
+
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 2rem 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+  @media (max-width: 860px) { ol.steps { grid-template-columns: 1fr; } }
+  ol.steps li { counter-increment: s; }
+  ol.steps li::before {
+    content: counter(s); display: block; font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 3.4rem; line-height: 1;
+    color: var(--grain); margin-bottom: .5rem;
+  }
+  ol.steps p { color: var(--ink-soft); }
+
+  table.uses { width: 100%; border-collapse: collapse; margin-top: 2rem; }
+  table.uses th, table.uses td { text-align: left; padding: 1rem .75rem 1rem 0; border-bottom: 1px solid var(--mist); vertical-align: top; }
+  table.uses th { font-weight: 700; font-variation-settings: 'wdth' 112; width: 30%; }
+  table.uses td { color: var(--ink-soft); }
+  table.uses td.m { font-size: .95rem; }
+  @media (max-width: 640px) {
+    table.uses, table.uses tbody, table.uses tr, table.uses th, table.uses td { display: block; width: 100%; }
+    table.uses th { border-bottom: 0; padding-bottom: .2rem; }
+    table.uses td { padding-top: .2rem; }
+  }
+
+  pre.code {
+    background: var(--ink); color: #DCE6E2; border-radius: 10px; padding: 1.1rem 1.25rem; overflow-x: auto; font-size: .85rem; line-height: 1.55;
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; margin: 0 0 1rem;
+  }
+  pre.code .c { color: #8C9DB5; }
+  pre.code .k { color: var(--grain); }
+  pre.code .s { color: #8FD3AE; }
+
+  .trust-list { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+  .trust-list li { padding: .85rem 0 .85rem 2rem; border-bottom: 1px solid var(--mist); position: relative; }
+  .trust-list li::before { content: ''; position: absolute; left: 0; top: 1.15rem; width: 14px; height: 8px; border-left: 3px solid var(--leaf); border-bottom: 3px solid var(--leaf); transform: rotate(-45deg); }
+
+  .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-top: 2rem; }
+  .plan { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: 1.5rem; }
+  .plan .price { font-size: 2.2rem; line-height: 1.1; margin: .3rem 0 .2rem; }
+  .plan ul { padding-left: 1.1rem; color: var(--ink-soft); margin: 1rem 0 0; }
+  .talk { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: 1.75rem; margin-top: 2rem; max-width: 760px; }
+
+  .stakes { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 2rem; border-radius: 12px; overflow: hidden; }
+  @media (max-width: 760px) { .stakes { grid-template-columns: 1fr; } }
+  .stakes > div { padding: 2rem; }
+  .stakes .without { background: #F6E3DE; }
+  .stakes .with { background: #DDEFE5; }
+  .stakes h3 { margin-bottom: .8rem; }
+  .stakes ul { margin: 0; padding-left: 1.1rem; }
+  .stakes li { margin-bottom: .45rem; }
+
+  .cta { background: var(--ink); color: var(--paper); }
+  .cta h2 { color: var(--paper); }
+  .cta p { color: #C9D4D0; }
+  form.demo { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 640px) { form.demo { grid-template-columns: 1fr; } }
+  form.demo label { display: grid; gap: .35rem; font-size: .92rem; }
+  form.demo .full { grid-column: 1 / -1; }
+  form.demo input, form.demo select, form.demo textarea {
+    font: inherit; padding: .75rem .85rem; border-radius: 6px; border: 1px solid #4A5B7A; background: #1C2C4D; color: var(--paper);
+  }
+  form.demo textarea { min-height: 110px; resize: vertical; }
+  form.demo > *, form.demo input, form.demo select, form.demo textarea { min-width: 0; width: 100%; }
+  form.demo .btn-primary { width: auto; }
+  form.demo .btn-primary { background: var(--grain); color: var(--ink); border-color: var(--grain); justify-self: start; }
+  form.demo .btn-primary:hover { background: #F0C55A; }
+  .form-msg { min-height: 1.5em; font-size: .95rem; }
+  .form-msg.ok { color: #8FD3AE; }
+  .form-msg.err { color: #F3A796; }
+
+  footer { padding: 2.5rem 0; font-size: .9rem; color: var(--ink-soft); }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Titan by Kitovu, home"><b>Titan</b><span>by Kitovu</span></a>
+    <nav class="top" aria-label="Main">
+      <a class="hide-sm" href="#how">How it works</a>
+      <a class="hide-sm" href="#developers">Developers</a>
+      <a class="hide-sm" href="#pricing">Pricing</a>
+      <a href="#demo">Book a demo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- HERO: what the customer wants -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <div>
+        <h1 id="hero-title" class="display">Know what's happening at every site. And prove it.</h1>
+        <p class="lede">Titan connects your warehouse, farm, water and power sensors to one place. You get alerts the moment something goes wrong, and data your systems and your lenders can trust.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#demo">Book a demo</a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+      </div>
+
+      <div class="feed" aria-label="Example of live readings arriving in Titan">
+        <div class="feed-head">
+          <span class="pulse"><i aria-hidden="true"></i> Live readings</span>
+          <span>Example data</span>
+        </div>
+        <ol id="feed" aria-live="off"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section class="band" aria-labelledby="problem-title">
+    <div class="wrap">
+      <h2 id="problem-title" class="display">Your devices see the problem. Nobody else does.</h2>
+      <p class="lede">Most operations already have sensors. The trouble is what happens to the data afterwards.</p>
+      <div class="pains">
+        <div>
+          <h3>Locked in separate dashboards</h3>
+          <p>Every device comes with its own app. Nothing joins up, and none of it talks to the systems you actually run your business on.</p>
+        </div>
+        <div>
+          <h3>You find out after the loss</h3>
+          <p>Damp grain, a failed aerator, a door left open overnight. By the time someone checks, the stock is spoiled or gone.</p>
+        </div>
+        <div>
+          <h3>Nobody can rely on the numbers</h3>
+          <p>Lenders and insurers can't base decisions on readings anyone could have edited. So good operators get treated like risky ones.</p>
+        </div>
+      </div>
+      <p style="margin-top:2rem;font-weight:600">Decisions about food and money shouldn't rest on guesswork.</p>
+    </div>
+  </section>
+
+  <!-- GUIDE -->
+  <section aria-labelledby="guide-title">
+    <div class="wrap split">
+      <div>
+        <h2 id="guide-title" class="display">We built Titan because we needed it.</h2>
+        <p>Kitovu has run agricultural storage and supply in Nigeria since 2016. We know what it costs when produce spoils in a warehouse and no one saw it coming.</p>
+        <p>So we built our own monitoring hardware, and a finance platform that depends on knowing the condition of stored goods. Titan is the system underneath both. Now it's open to your devices too.</p>
+      </div>
+      <div class="guide-products">
+        <div class="product">
+          <h3>WareGuard</h3>
+          <p>Our warehouse monitor tracks temperature, humidity, produce moisture and intruders, stack by stack, and reports to Titan over Wi-Fi or GSM.</p>
+        </div>
+        <div class="product">
+          <h3>StorageX</h3>
+          <p>Our warehouse receipt platform reads Titan's verified storage conditions, so lenders can see the state of the stock behind every receipt.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAN -->
+  <section class="band" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <h2 id="how-title" class="display">Up and running in three steps</h2>
+      <ol class="steps">
+        <li>
+          <h3>Connect your devices</h3>
+          <p>Point any MQTT or HTTPS device at Titan, or install WareGuard. Each device gets its own key, so every reading it sends is signed.</p>
+        </li>
+        <li>
+          <h3>See and get alerted</h3>
+          <p>Watch every site on one dashboard. Set limits once and get an SMS or email the moment a reading crosses them, or a device goes quiet.</p>
+        </li>
+        <li>
+          <h3>Share with the people who need it</h3>
+          <p>Send data to your own systems through the API. Give lenders, insurers or buyers access to exactly the sites and readings you choose, and take it back any time.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- USE CASES -->
+  <section aria-labelledby="uses-title">
+    <div class="wrap">
+      <h2 id="uses-title" class="display">One platform, whatever you're monitoring</h2>
+      <table class="uses">
+        <tbody>
+          <tr><th scope="row">Warehouses and silos</th><td>Spot damp and heating stock early, know who entered and when, and back warehouse receipts with condition history.</td><td class="m data">Temperature, humidity, grain moisture, CO₂, motion, door</td></tr>
+          <tr><th scope="row">Aquaponics and fish farms</th><td>Catch oxygen crashes and pH swings before they kill a tank.</td><td class="m data">Dissolved oxygen, pH, ammonia, water temperature, level</td></tr>
+          <tr><th scope="row">Hydroponics and greenhouses</th><td>Keep nutrient strength and climate on target, room by room.</td><td class="m data">EC, pH, air temperature, humidity, VPD, light</td></tr>
+          <tr><th scope="row">Cold rooms and cold chain</th><td>Prove the cold chain held, from intake to dispatch.</td><td class="m data">Temperature, door, power, battery</td></tr>
+          <tr><th scope="row">Poultry houses</th><td>Protect flocks from heat stress and bad air.</td><td class="m data">Temperature, humidity, ammonia, fans</td></tr>
+          <tr><th scope="row">Irrigation and solar power</th><td>Know pumps are running and batteries are charged without driving out to check.</td><td class="m data">Flow, soil moisture, voltage, energy, battery charge</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DEVELOPERS -->
+  <section class="band" id="developers" aria-labelledby="dev-title">
+    <div class="wrap split">
+      <div>
+        <h2 id="dev-title" class="display">Built for the people wiring it up</h2>
+        <p>Hardware makers get a published device protocol, MQTT over TLS with an HTTPS fallback, and offline buffering that keeps the original timestamps.</p>
+        <p>Software teams get a REST API, signed webhooks, and readings aggregated by minute, hour or day.</p>
+        <p><a href="/docs/device-protocol-v1.md">Read the device protocol</a></p>
+      </div>
+      <div>
+        <pre class="code" aria-label="Example API request"><span class="c"># Hourly grain moisture for one warehouse</span>
+curl https://titan.kitovu.com.ng/v1/readings \
+  -H <span class="s">"Authorization: Bearer tk_live_…"</span> \
+  -d site=<span class="s">wh_iseyin_01</span> \
+  -d metric=<span class="s">produce.moisture</span> \
+  -d interval=<span class="s">1h</span> -G
+
+<span class="c"># Response (trimmed)</span>
+{ <span class="k">"time"</span>: <span class="s">"2026-11-13T08:00:00Z"</span>,
+  <span class="k">"channel"</span>: <span class="s">"z1/stack-a"</span>,
+  <span class="k">"avg"</span>: 12.9, <span class="k">"min"</span>: 12.7, <span class="k">"max"</span>: 13.1 }</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST -->
+  <section aria-labelledby="trust-title">
+    <div class="wrap split">
+      <div>
+        <h2 id="trust-title" class="display">Readings you can stand behind</h2>
+        <p>Each device holds a private key that never leaves it. Every message it sends is signed, and Titan checks the signature before accepting a single number.</p>
+      </div>
+      <ul class="trust-list">
+        <li>A reading changed after it left the device fails verification and raises an alert.</li>
+        <li>Readings stored during a network outage keep their original time and signature.</li>
+        <li>Anyone you share with can check any reading against the device's public key themselves.</li>
+        <li>Every access to shared data is logged against the permission that allowed it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="band" id="pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <h2 id="pricing-title" class="display">Pricing</h2>
+      <p class="lede">Pay per connected device. API access is included up to your plan's allowance.</p>
+      <div id="plans" class="plans" hidden></div>
+      <div id="talk" class="talk">
+        <h3>Talk to us about pricing</h3>
+        <p>Tell us how many devices and sites you have and we'll put together a plan. WareGuard installations are quoted with hardware and setup included.</p>
+        <a class="btn btn-primary" href="#demo">Get a quote</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- STAKES -->
+  <section aria-labelledby="stakes-title">
+    <div class="wrap">
+      <h2 id="stakes-title" class="display">What changes</h2>
+      <div class="stakes">
+        <div class="without">
+          <h3>Without Titan</h3>
+          <ul>
+            <li>Spoiled stock you only discover at dispatch</li>
+            <li>Loans declined because conditions can't be shown</li>
+            <li>A dashboard for every device and none for the business</li>
+            <li>Months of engineering spent on IoT plumbing</li>
+          </ul>
+        </div>
+        <div class="with">
+          <h3>With Titan</h3>
+          <ul>
+            <li>Problems caught while there's still time to act</li>
+            <li>Condition history lenders and insurers accept</li>
+            <li>Every site and device in one view</li>
+            <li>Your team building your product, not infrastructure</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CALL TO ACTION -->
+  <section class="cta" id="demo" aria-labelledby="demo-title">
+    <div class="wrap split">
+      <div>
+        <h2 id="demo-title" class="display">See your own sites on Titan</h2>
+        <p>Book a 30-minute demo. We'll look at the devices you have, what you need to know from them, and who needs to see it.</p>
+        <p>Prefer email? Write to <a href="mailto:titan@kitovu.com.ng">titan@kitovu.com.ng</a>.</p>
+      </div>
+      <form class="demo" id="demo-form" novalidate>
+        <label>Your name<input name="name" autocomplete="name" required></label>
+        <label>Work email<input name="email" type="email" autocomplete="email" required></label>
+        <label>Company<input name="company" autocomplete="organization"></label>
+        <label>Phone<input name="phone" type="tel" autocomplete="tel"></label>
+        <label class="full">What do you want to monitor?
+          <select name="useCase">
+            <option value="warehouse">Warehouses or silos</option>
+            <option value="aquaponics">Aquaponics or fish farming</option>
+            <option value="hydroponics">Hydroponics or greenhouses</option>
+            <option value="cold_chain">Cold rooms or cold chain</option>
+            <option value="poultry">Poultry houses</option>
+            <option value="energy">Irrigation or solar power</option>
+            <option value="data_access">I want access to site data (lender, insurer, buyer)</option>
+            <option value="hardware">I make devices and want to connect them</option>
+            <option value="other">Something else</option>
+          </select>
+        </label>
+        <label class="full">Anything else we should know?<textarea name="message"></textarea></label>
+        <button class="btn btn-primary" type="submit">Book a demo</button>
+        <p class="form-msg full" id="form-msg" role="status"></p>
+      </form>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Titan is built by Kitovu Technology Company Limited, Oyo State, Nigeria.</span>
+    <span><a href="mailto:titan@kitovu.com.ng">titan@kitovu.com.ng</a></span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // Example readings for the hero feed. Illustrative, not live customer data.
+  const samples = [
+    { where: 'Warehouse, Iseyin', what: 'Maize, stack A, grain moisture', v: () => (12.6 + Math.random() * 0.5).toFixed(1), u: '%' },
+    { where: 'Fish farm, Ibadan', what: 'Tank 3, dissolved oxygen', v: () => (6.2 + Math.random() * 0.6).toFixed(1), u: 'mg/L' },
+    { where: 'Greenhouse, Jos', what: 'Bay 2, nutrient strength (EC)', v: () => (1.8 + Math.random() * 0.3).toFixed(2), u: 'mS/cm' },
+    { where: 'Cold room, Lagos', what: 'Room 1, air temperature', v: () => (3.1 + Math.random() * 0.8).toFixed(1), u: '°C' },
+    { where: 'Warehouse, Iseyin', what: 'Zone 1, relative humidity', v: () => (66 + Math.random() * 10).toFixed(0), u: '%RH', warnAbove: 74 },
+    { where: 'Solar pump, Kano', what: 'Battery charge', v: () => (78 + Math.random() * 15).toFixed(0), u: '%' },
+  ];
+  const feed = document.getElementById('feed');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let i = 0;
+  function row(animate) {
+    const s = samples[i++ % samples.length];
+    const val = s.v();
+    const warn = s.warnAbove && Number(val) > s.warnAbove;
+    const li = document.createElement('li');
+    li.className = 'row' + (warn ? ' warn' : '') + (animate ? ' enter' : '');
+    li.innerHTML = `<span class="where"></span><span class="val data"></span><span class="what"></span><span class="sig"></span>`;
+    li.querySelector('.where').textContent = s.where;
+    li.querySelector('.what').textContent = s.what;
+    li.querySelector('.val').innerHTML = `${val}<small></small>`;
+    li.querySelector('.val small').textContent = s.u;
+    li.querySelector('.sig').textContent = warn ? 'Signature verified. Above limit: SMS sent to warehouse manager' : 'Signature verified';
+    feed.prepend(li);
+    while (feed.children.length > 5) feed.lastChild.remove();
+  }
+  for (let n = 0; n < 5; n++) row(false);
+  if (!reduce) setInterval(() => row(true), 2600);
+
+  // Plans published in the Titan admin panel; falls back to "Talk to us".
+  fetch('/api/public/plans').then((r) => r.ok ? r.json() : null).then((j) => {
+    if (!j || !j.plans || !j.plans.length) return;
+    const wrap = document.getElementById('plans');
+    const fmt = (n, c) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(n);
+    for (const p of j.plans) {
+      const el = document.createElement('div');
+      el.className = 'plan';
+      el.innerHTML = '<h3></h3><div class="price display"></div><div class="per"></div><ul></ul>';
+      el.querySelector('h3').textContent = p.name;
+      el.querySelector('.price').textContent = fmt(p.pricePerDevice, p.currency);
+      el.querySelector('.per').textContent = 'per device per month' + (p.baseFee ? ` plus ${fmt(p.baseFee, p.currency)} a month` : '');
+      for (const f of p.features || []) { const li = document.createElement('li'); li.textContent = f; el.querySelector('ul').append(li); }
+      wrap.append(el);
+    }
+    wrap.hidden = false;
+    document.querySelector('#talk h3').textContent = 'Need something bigger?';
+  }).catch(() => {});
+
+  // Demo form
+  const form = document.getElementById('demo-form');
+  const msg = document.getElementById('form-msg');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    if (!data.name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) {
+      msg.className = 'form-msg full err';
+      msg.textContent = 'Add your name and a work email so we can reply.';
+      return;
+    }
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = 'Booking…';
+    try {
+      const res = await fetch('/api/public/demo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error();
+      form.reset();
+      msg.className = 'form-msg full ok';
+      msg.textContent = 'Demo request sent. We’ll email you within one working day to pick a time.';
+    } catch {
+      msg.className = 'form-msg full err';
+      msg.textContent = 'Your request didn’t go through. Try again, or email titan@kitovu.com.ng.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Book a demo';
+    }
+  });
+})();
+</script>
+</body>
+</html>

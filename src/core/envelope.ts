@@ -71,6 +71,29 @@ export function verifyEnvelope(env: Envelope, key: DeviceKeyRecord | null): Buff
 
 const isInt = (x: unknown) => typeof x === 'number' && Number.isInteger(x);
 
+/**
+ * Protocol v1.1 compact readings for LoRa and other small links: a reading may be an array
+ * [metric, value, channel, cal?], and the metric may be one of these short codes.
+ */
+export const SHORT_METRICS: Record<string, string> = {
+  at: 'air.temperature', ah: 'air.humidity', ac: 'air.co2', pm: 'produce.moisture', pr: 'produce.moisture_raw',
+  pt: 'produce.temperature', pw: 'produce.weight', sm: 'security.motion', sd: 'security.door', wt: 'water.temperature',
+  wp: 'water.ph', wd: 'water.do', we: 'water.ec', wl: 'water.level', sl: 'soil.moisture', kt: 'kiln.temperature',
+  fm: 'feedstock.mass', bm: 'biochar.mass', st: 'stove.temperature', se: 'stove.energy', lm: 'lpg.mass',
+  so: 'solar.energy', sp: 'solar.power', bs: 'power.battery_soc', pv: 'power.voltage', es: 'equipment.state',
+  al: 'appliance.locked', ad: 'appliance.door_opens',
+};
+
+function normaliseReading(r: unknown): unknown {
+  let out: any = r;
+  if (Array.isArray(r)) {
+    const [m, v, ch, cal] = r;
+    out = { m, v, ch, ...(cal !== undefined ? { cal } : {}) };
+  }
+  if (out && typeof out.m === 'string' && SHORT_METRICS[out.m]) out = { ...out, m: SHORT_METRICS[out.m] };
+  return out;
+}
+
 export function parseBody(bytes: Buffer, kind: MessageKind, expectedDevice: string): Body {
   let b: Body;
   try {
@@ -90,6 +113,7 @@ export function parseBody(bytes: Buffer, kind: MessageKind, expectedDevice: stri
   if (b.ts === 0 && !isInt(b.upn)) fail('upn is required when ts is 0');
   if (b.r !== undefined) {
     if (!Array.isArray(b.r)) fail('r must be an array');
+    b.r = b.r.map(normaliseReading) as ReadingIn[];
     for (const r of b.r) {
       if (!r || typeof r.m !== 'string' || typeof r.ch !== 'string' || typeof r.v !== 'number' || !Number.isFinite(r.v)) {
         fail('Each reading needs string m, string ch and finite numeric v');

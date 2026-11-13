@@ -93,14 +93,14 @@ export function createApp(d: AppDeps): Router {
   r.post('/internal/emqx/acl', async (req) => {
     internal(req);
     const { username, topic, action } = req.body ?? {};
-    return { body: { result: d.devices.authorize(String(username ?? ''), String(topic ?? ''), String(action ?? '')) ? 'allow' : 'deny' } };
+    return { body: { result: (await d.devices.authorize(String(username ?? ''), String(topic ?? ''), String(action ?? ''))) ? 'allow' : 'deny' } };
   });
 
   r.post('/internal/emqx/message', async (req) => {
     internal(req);
     const { topic, payload, username } = req.body ?? {};
     const t = parseUplinkTopic(String(topic ?? ''));
-    if (!t || t.deviceId !== username) throw new HttpError(400, 'bad_topic');
+    if (!t || !(await d.devices.maySubmitFor(String(username ?? ''), t.deviceId))) throw new HttpError(400, 'bad_topic');
     if (t.kind === 'lwt') {
       await d.pipeline.deviceOffline(t.deviceId);
       return { body: { ok: true } };

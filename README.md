@@ -10,6 +10,7 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 - [Product requirements](docs/PRD.md)
 - [Deployment](docs/deployment.md)
 - [Sensor node reference designs](docs/sensor-nodes.md)
+- [WareGuard firmware migration, step by step](docs/wareguard-firmware-migration.md)
 - Integration Guide and API docs: `web/docs/index.html`, served at `/docs/`
 
 ## What's built (v1, stage 1)
@@ -38,7 +39,9 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 | Sensor node reference designs (`docs/sensor-nodes.md`) | Done |
 | Client console (`/console`): sites, devices with charts and controls, alerts, rules, sharing, API keys and webhooks, carbon (read), billing with Paystack, team | Done |
 | MCP server for AI agents (`/mcp`), same permissions as the API key | Done |
-| LoRa gateway relay (Protocol v1.1) | Next |
+| LoRa gateway relay and compact readings (Protocol v1.1) | Done |
+| Kitovu support sessions in client consoles (1 hour, reason required, visible to the client) | Done |
+| Device simulator (`tools/simulate-device.ts`) and WareGuard reference firmware (`firmware/wareguard/`, untested on hardware) | Done |
 
 ## Develop
 

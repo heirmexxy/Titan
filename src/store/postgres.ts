@@ -13,7 +13,7 @@ const deviceRow = (r: any): Device => ({
   id: r.id, orgId: r.org_id, siteId: r.site_id, siteKind: r.site_kind ?? null, typeId: r.type_id, connectivity: r.connectivity,
   tokenHash: r.token_hash, status: r.status, heartbeatS: r.heartbeat_s, lastSeenAt: r.last_seen_at, configVersion: r.config_version,
   configAckedVersion: r.config_acked_version, configOverride: r.config_override ?? {}, typeDefaults: r.type_defaults ?? {},
-  provisionCodeHash: r.provision_code_hash, provisionExpiresAt: r.provision_expires_at,
+  provisionCodeHash: r.provision_code_hash, provisionExpiresAt: r.provision_expires_at, gatewayId: r.gateway_id ?? null,
 });
 const alertRow = (r: any): Alert => ({
   id: r.id, orgId: r.org_id, siteId: r.site_id, deviceId: r.device_id, channel: r.channel, ruleId: r.rule_id, code: r.code,

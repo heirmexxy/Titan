@@ -34,14 +34,29 @@ export class DeviceService {
     return safeEqual(d.tokenHash, sha256Hex(password));
   }
 
-  /** EMQX HTTP authorisation: a device may only use its own topic tree. */
-  authorize(username: string, topic: string, action: 'publish' | 'subscribe' | string): boolean {
-    const base = `titan/v1/${username}/`;
-    if (!topic.startsWith(base)) return false;
-    const rest = topic.slice(base.length);
+  /**
+   * EMQX HTTP authorisation: a device may only use its own topic tree. A LoRa gateway may also
+   * publish uplinks and subscribe to downlinks for the nodes assigned to it.
+   */
+  async authorize(username: string, topic: string, action: 'publish' | 'subscribe' | string): Promise<boolean> {
+    const m = /^titan\/v1\/([A-Za-z0-9_-]{3,64})\/(.+)$/.exec(topic);
+    if (!m) return false;
+    const [, target, rest] = m;
+    if (target !== username) {
+      const node = await this.store.getDevice(target);
+      if (!node || node.gatewayId !== username) return false;
+      if (action === 'publish' && rest === 'up/lwt') return false; // a gateway can't speak for a node's connection
+    }
     if (action === 'publish') return /^up\/(telemetry|event|state|ack|lwt)$/.test(rest);
     if (action === 'subscribe') return rest === 'down/#' || rest === 'down/config' || rest === 'down/cmd';
     return false;
+  }
+
+  /** True if `username` may submit uplinks for `deviceId` (itself, or as its gateway). */
+  async maySubmitFor(username: string, deviceId: string): Promise<boolean> {
+    if (username === deviceId) return true;
+    const node = await this.store.getDevice(deviceId);
+    return !!node && node.gatewayId === username;
   }
 
   /** Issues a one-time provisioning code (valid 7 days). Returns the plain code to hand to the installer. */

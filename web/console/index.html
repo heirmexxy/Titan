@@ -221,11 +221,13 @@
       <aside>
         <div class="brand">Titan<span>${me.orgName}</span></div>
         <nav aria-label="Console">${raw(NAV.map(([k, label]) => `<a href="#${k}" ${k === active ? 'aria-current="page"' : ''}>${esc(label)}${k === 'alerts' && openAlerts ? `<span class="badge">${openAlerts}</span>` : ''}</a>`).join(''))}</nav>
-        <div class="who">${me.email}<br>${isOwner() ? 'Account owner' : 'Team member'}<br><button class="small" id="logout">Sign out</button></div>
+        <div class="who">${me.email}<br>${me.support ? 'Kitovu support' : isOwner() ? 'Account owner' : 'Team member'}<br><button class="small" id="logout">Sign out</button></div>
       </aside>
-      <main>${raw(content)}</main>
+      <main>${raw(me.support ? `<div class="secret" role="status" style="margin-top:0">Kitovu support (${esc(me.support.email)}) is working in this account until ${esc(new Date(me.support.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}. Reason: ${esc(me.support.reason ?? '')} <button class="small" id="end-support">End support session</button></div>` : '')}${raw(content)}</main>
     </div>`;
     app.querySelector('#logout').onclick = async () => { await api('POST', '/logout'); me = null; renderLogin(); };
+    const end = app.querySelector('#end-support');
+    if (end) end.onclick = async () => { await api('POST', '/logout'); me = null; window.close(); renderLogin(); };
   }
   function renderLogin() {
     app.innerHTML = `<div class="login panel">
@@ -365,6 +367,7 @@
             <div class="row">${simple.map((c) => `<button data-cmd="${esc(c.name)}">${esc(c.label)}</button>`).join('')}</div>
             ${withArgs.map((c) => `<form class="f cmd-form" data-cmd="${esc(c.name)}" style="margin-top:.75rem"><div class="lbl" style="grid-column:1/-1"><b>${esc(c.label)}</b></div>${Object.entries(c.args).map(([k, a]) => input(k, a)).join('')}<div><button type="submit">Send</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>`).join('')}` : '<p class="muted">This device has no remote controls.</p>')}
           ${raw(commands.history.length ? `<h2 style="margin-top:1rem">Command log</h2><table><tbody>${commands.history.map((c) => `<tr><td><code>${esc(c.name)}</code> <span class="small muted">${esc(JSON.stringify(c.args) === '{}' ? '' : JSON.stringify(c.args))}</span></td><td><span class="pill ${c.status === 'acked' ? 'st-online' : c.status === 'failed' ? 'st-offline' : 'pending'}">${c.status === 'acked' ? 'done' : esc(c.status)}</span></td><td class="small">${esc(ago(c.sent_at))}</td></tr>`).join('')}</tbody></table>` : '')}
+          ${raw(ownerOnly(dv.type_id !== 'titan-lora-gateway-v1' ? `<form class="f" id="gw-form" style="margin-top:1rem"><label>Connects through LoRa gateway<input name="gatewayId" value="${esc(dv.gateway_id ?? '')}" placeholder="none"></label><div><button type="submit">Save</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>` : ''))}
           ${raw(ownerOnly('<p style="margin-top:1rem"><button id="new-code">New provisioning code</button></p><div id="code-out"></div>'))}
         </div>
       </div>
@@ -377,6 +380,7 @@
       try { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: f.dataset.cmd, args: formData(f) }); toast('Command sent'); route(); }
       catch (err) { const m = f.querySelector('.form-msg'); m.className = 'form-msg small err'; m.textContent = err.message; }
     }));
+    bindForm('#gw-form', async (d) => { await api('POST', `/devices/${encodeURIComponent(id)}/gateway`, { gatewayId: d.gatewayId || null }); toast('Saved'); route(); });
     onClick('#new-code', async () => { const out = await api('POST', `/devices/${encodeURIComponent(id)}/code`); app.querySelector('#code-out').innerHTML = h`<div class="secret">Provisioning code: <code>${out.provisioningCode}</code></div>`; });
   };
 
@@ -489,13 +493,15 @@
   };
 
   views.settings = async () => {
-    const { users, orgId, devicePrefix } = await api('GET', '/team');
+    const [{ users, orgId, devicePrefix }, { entries }] = await Promise.all([api('GET', '/team'), api('GET', '/support-log')]);
     layout('settings', h`<h1>Settings</h1>
       <div class="grid2">
         <div class="panel"><h2>Organisation</h2><dl class="kv"><dt>Name</dt><dd>${me.orgName}</dd><dt>Organisation ID</dt><dd><code>${orgId}</code></dd><dt>Device prefix</dt><dd>${devicePrefix ?? 'not assigned'}</dd></dl>
           <h2 style="margin-top:1.2rem">Change your password</h2>
           <form class="f" id="pw-form"><label>Current password<input name="current" type="password" autocomplete="current-password" required></label><label>New password<input name="next" type="password" minlength="10" autocomplete="new-password" required></label><div><button type="submit">Change password</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>
         <div class="panel"><h2>Team</h2><table><tbody>${raw(users.map((u) => `<tr><td>${esc(u.email)}<div class="small muted">${esc(u.name ?? '')}</div></td><td>${u.role === 'client_owner' ? 'Owner' : 'Member'}</td><td class="small">${esc(ago(u.last_login_at))}</td></tr>`).join(''))}</tbody></table>
+          <h2 style="margin-top:1.2rem">Kitovu support access</h2>
+          ${raw(entries.length ? `<table><tbody>${entries.map((e) => `<tr><td>${esc(e.action === 'support.session_started' ? `Support session opened by ${e.detail?.by ?? e.email ?? 'Kitovu'}: ${e.detail?.reason ?? ''}` : `${e.action}${e.target ? ' · ' + e.target : ''} (${e.email ?? 'Kitovu support'})`)}</td><td class="small">${esc(when(e.time))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Kitovu support has not accessed this account.</p>')}
           ${raw(ownerOnly(`<form class="f" id="team-form" style="margin-top:1rem"><label>Email<input name="email" type="email" required></label><label>Name<input name="name"></label><label>Role<select name="role"><option value="client_member">Member (view, acknowledge alerts)</option><option value="client_owner">Owner (everything)</option></select></label><div><button type="submit">Add person</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="team-out"></div>`))}</div>
       </div>`);
     bindForm('#pw-form', async (d) => { await api('POST', '/password', d); me = null; renderLogin(); toast('Password changed. Sign in again.'); });

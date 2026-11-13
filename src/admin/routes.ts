@@ -5,7 +5,7 @@ import { checkPolicy, CommandError, findCommand, validateArgs, type CommandSpec 
 import type { ActuatorService } from '../actuators/service.js';
 import { CarbonError, type CarbonService } from '../carbon/service.js';
 import { MEASUREMENT_KINDS } from '../carbon/methodologies.js';
-import { clearCookie, hashPassword, parseCookies, SESSION_COOKIE, SESSION_DAYS, sessionCookie, verifyPassword } from './auth.js';
+import { clearCookie, CONSOLE_COOKIE, hashPassword, parseCookies, SESSION_COOKIE, SESSION_DAYS, sessionCookie, verifyPassword } from './auth.js';
 
 interface Pool { query(text: string, values?: unknown[]): Promise<{ rows: any[]; rowCount: number | null }> }
 
@@ -506,6 +506,33 @@ export function registerAdmin(r: Router, d: AdminDeps) {
       [org.id, email, optStr(req.body?.name), role, await hashPassword(password)])).rows[0];
     await audit(s, 'client_user.created', row.id, { org: org.id, email, role });
     return { status: 201, body: { email, role, temporaryPassword: password, signIn: '/console' } };
+  });
+  // Kitovu support: open a client's console as that organisation (1 hour, reason required, logged and visible to the client).
+  r.post('/admin/api/orgs/:id/support-session', async (req) => {
+    const s = await session(req);
+    const reason = str(req.body?.reason, 'reason', 300);
+    const org = (await q(`SELECT id, name, kind FROM organisations WHERE id = $1`, [req.params.id])).rows[0];
+    if (!org || org.kind === 'kitovu') throw new HttpError(400, 'invalid_org', 'Choose a client organisation');
+    const token = randomToken(32);
+    await q(`INSERT INTO sessions (id, user_id, expires_at, ip, acting_org_id, reason) VALUES ($1,$2, now() + interval '1 hour', $3, $4, $5)`,
+      [sha256Hex(token), s.userId, req.ip, org.id, reason]);
+    await q(`INSERT INTO audit_log (actor, org_id, action, target, detail) VALUES ($1,$2,'support.session_started',$3,$4)`,
+      [`support:${s.userId}`, org.id, org.id, JSON.stringify({ by: s.email, reason })]);
+    return { body: { url: '/console', org: org.name, expiresInMinutes: 60 }, headers: { 'Set-Cookie': sessionCookie(token, d.secureCookies, CONSOLE_COOKIE).replace(`Max-Age=${SESSION_DAYS * 86400}`, 'Max-Age=3600') } };
+  });
+  r.post('/admin/api/devices/:id/gateway', async (req) => {
+    const s = await session(req);
+    const dev = (await q(`SELECT org_id FROM devices WHERE id = $1`, [req.params.id])).rows[0];
+    if (!dev) throw new HttpError(404, 'not_found');
+    const gw = optStr(req.body?.gatewayId, 64)?.toUpperCase() ?? null;
+    if (gw) {
+      const g = (await q(`SELECT org_id, type_id FROM devices WHERE id = $1`, [gw])).rows[0];
+      if (!g || g.type_id !== 'titan-lora-gateway-v1') throw new HttpError(400, 'not_a_gateway', `${gw} is not a registered LoRa gateway`);
+      if (g.org_id !== dev.org_id) throw new HttpError(400, 'other_org', 'Gateway and node must belong to the same organisation');
+    }
+    await q(`UPDATE devices SET gateway_id = $2 WHERE id = $1`, [req.params.id, gw]);
+    await audit(s, 'device.gateway_set', req.params.id, { gateway: gw });
+    return { body: { gatewayId: gw } };
   });
   r.post('/admin/api/password', async (req) => {
     const s = await session(req);

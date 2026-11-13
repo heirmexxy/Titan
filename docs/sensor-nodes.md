@@ -67,7 +67,7 @@ Where dozens of nodes sit close together (a cookstove programme in one community
 
 - Nodes use LoRa to reach one gateway with Wi-Fi or GSM. Check the NCC's current band allocation before ordering radios (LoRaWAN regional parameters list Nigeria under EU863–870).
 - **Each node still signs its own messages.** The gateway forwards the envelopes unchanged to `titan/v1/<nodeId>/up/...` using its own MQTT login, and is authorised to publish for the nodes assigned to it. A compromised gateway can delay or drop data, but cannot change or invent it.
-- Signed envelopes are about 300 bytes. For LoRa, nodes send compact readings (short metric codes) inside the signed body. *(Gateway relaying and compact bodies are a Protocol v1.1 item; not in the v1 server yet.)*
+- Signed envelopes are about 300 bytes. For LoRa, nodes send compact readings with short metric codes inside the signed body (Device Protocol §14). Assign each node to its gateway in Titan (admin or client console → device → "Connects through LoRa gateway").
 
 ## 6. Controller node (`titan-controller-v1`)
 

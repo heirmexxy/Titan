@@ -18,6 +18,8 @@ export interface Device {
   typeDefaults: Record<string, unknown>;
   provisionCodeHash: string | null;
   provisionExpiresAt: Date | null;
+  /** LoRa gateway that relays this node's messages, if any. */
+  gatewayId?: string | null;
 }
 
 export interface Metric {

@@ -27,11 +27,11 @@ export interface ConsoleDeps {
   secureCookies: boolean;
 }
 
-interface Who { userId: string; email: string; name: string | null; role: 'client_owner' | 'client_member'; orgId: string; orgName: string; devicePrefix: string | null }
+interface Who { userId: string; email: string; name: string | null; role: 'client_owner' | 'client_member'; orgId: string; orgName: string; devicePrefix: string | null; support: { email: string; reason: string | null; expiresAt: string } | null }
 
 const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon'];
 const SITE_KINDS = ['warehouse', 'aquaponics', 'hydroponics', 'greenhouse', 'cold_room', 'poultry', 'field', 'energy', 'other'];
-const CLIENT_DEVICE_TYPES = ['titan-controller-v1', 'paygo-appliance-v1', 'titan-kiln-v1', 'titan-cookstove-v1', 'titan-solar-v1', 'wareguard-v1'];
+const CLIENT_DEVICE_TYPES = ['titan-controller-v1', 'paygo-appliance-v1', 'titan-kiln-v1', 'titan-cookstove-v1', 'titan-solar-v1', 'titan-lora-gateway-v1', 'wareguard-v1'];
 
 const str = (v: unknown, name: string, max = 200): string => {
   if (typeof v !== 'string' || !v.trim()) throw new HttpError(400, 'invalid_request', `${name} is required`);
@@ -42,19 +42,25 @@ const optStr = (v: unknown, max = 200) => (typeof v === 'string' && v.trim() ? v
 export function registerConsole(r: Router, d: ConsoleDeps) {
   const q = (t: string, v: unknown[] = []) => d.pool.query(t, v);
   const audit = (w: Who, action: string, target: string | null, detail?: unknown) =>
-    q(`INSERT INTO audit_log (actor, org_id, action, target, detail) VALUES ($1,$2,$3,$4,$5)`, [`user:${w.userId}`, w.orgId, action, target, detail === undefined ? null : JSON.stringify(detail)]);
+    q(`INSERT INTO audit_log (actor, org_id, action, target, detail) VALUES ($1,$2,$3,$4,$5)`,
+      [`${w.support ? 'support' : 'user'}:${w.userId}`, w.orgId, action, target, detail === undefined ? null : JSON.stringify(detail)]);
 
   const who = async (req: Req, owner = false): Promise<Who> => {
     const token = parseCookies(req.headers.cookie)[CONSOLE_COOKIE];
     if (!token) throw new HttpError(401, 'unauthorized');
+    // Either a client user in their own organisation, or a Kitovu support session acting inside one.
     const row = (await q(
-      `SELECT u.id, u.email, u.name, u.role, o.id AS org_id, o.name AS org_name, o.device_prefix FROM sessions s
-       JOIN users u ON u.id = s.user_id JOIN organisations o ON o.id = u.org_id
-       WHERE s.id = $1 AND s.expires_at > now() AND u.disabled_at IS NULL AND u.role IN ('client_owner','client_member')`, [sha256Hex(token)])).rows[0];
+      `SELECT u.id, u.email, u.name, u.role, s.acting_org_id, s.reason, s.expires_at, o.id AS org_id, o.name AS org_name, o.device_prefix
+       FROM sessions s JOIN users u ON u.id = s.user_id JOIN organisations o ON o.id = COALESCE(s.acting_org_id, u.org_id)
+       WHERE s.id = $1 AND s.expires_at > now() AND u.disabled_at IS NULL
+         AND ((s.acting_org_id IS NULL AND u.role IN ('client_owner','client_member')) OR (s.acting_org_id IS NOT NULL AND u.role IN ('admin','ops')))`,
+      [sha256Hex(token)])).rows[0];
     if (!row) throw new HttpError(401, 'unauthorized');
     if (req.method !== 'GET' && req.headers['x-titan-console'] !== '1') throw new HttpError(403, 'forbidden', 'Missing X-Titan-Console header');
-    if (owner && row.role !== 'client_owner') throw new HttpError(403, 'forbidden', 'Only account owners can do this');
-    return { userId: row.id, email: row.email, name: row.name, role: row.role, orgId: row.org_id, orgName: row.org_name, devicePrefix: row.device_prefix };
+    const support = row.acting_org_id ? { email: row.email, reason: row.reason, expiresAt: new Date(row.expires_at).toISOString() } : null;
+    const role = support ? 'client_owner' : row.role;
+    if (owner && role !== 'client_owner') throw new HttpError(403, 'forbidden', 'Only account owners can do this');
+    return { userId: row.id, email: row.email, name: row.name, role, orgId: row.org_id, orgName: row.org_name, devicePrefix: row.device_prefix, support };
   };
   const ownSite = async (w: Who, siteId: string) => {
     const s = (await q(`SELECT * FROM sites WHERE id = $1 AND org_id = $2`, [siteId, w.orgId])).rows[0];
@@ -170,7 +176,8 @@ export function registerConsole(r: Router, d: ConsoleDeps) {
       `SELECT dv.id, dv.type_id, dv.connectivity, dv.status, dv.last_seen_at, dv.config_version, dv.config_acked_version, s.name AS site_name, s.id AS site_id
        FROM devices dv LEFT JOIN sites s ON s.id = dv.site_id WHERE dv.org_id = $1 ORDER BY dv.id`, [w.orgId])).rows;
     const types = (await q(`SELECT id, name FROM device_types WHERE id = ANY($1::text[]) ORDER BY name`, [CLIENT_DEVICE_TYPES])).rows;
-    return { body: { devices, types, devicePrefix: w.devicePrefix } };
+    const gateways = devices.filter((x: any) => x.type_id === 'titan-lora-gateway-v1').map((x: any) => x.id);
+    return { body: { devices, types, gateways, devicePrefix: w.devicePrefix } };
   });
   r.post('/console/api/devices', async (req) => {
     const w = await who(req, true);
@@ -219,6 +226,20 @@ export function registerConsole(r: Router, d: ConsoleDeps) {
       if (e instanceof CommandError) throw new HttpError(e.code === 'not_allowed' ? 403 : 400, e.code, e.message);
       throw e;
     }
+  });
+  r.post('/console/api/devices/:id/gateway', async (req) => {
+    const w = await who(req, true);
+    await ownDevice(w, req.params.id);
+    const gw = optStr(req.body?.gatewayId, 64)?.toUpperCase() ?? null;
+    if (gw) {
+      const g = (await q(`SELECT org_id, type_id FROM devices WHERE id = $1`, [gw])).rows[0];
+      if (!g || g.org_id !== w.orgId) throw new HttpError(400, 'gateway_not_found', 'Gateway must be one of your devices');
+      if (g.type_id !== 'titan-lora-gateway-v1') throw new HttpError(400, 'not_a_gateway', `${gw} is not a LoRa gateway`);
+      if (gw === req.params.id) throw new HttpError(400, 'invalid_gateway');
+    }
+    await q(`UPDATE devices SET gateway_id = $2 WHERE id = $1`, [req.params.id, gw]);
+    await audit(w, 'device.gateway_set', req.params.id, { gateway: gw });
+    return { body: { gatewayId: gw } };
   });
   r.post('/console/api/devices/:id/code', async (req) => {
     const w = await who(req, true);
@@ -419,8 +440,17 @@ export function registerConsole(r: Router, d: ConsoleDeps) {
     await audit(w, 'user.created', email, { role });
     return { status: 201, body: { email, role, temporaryPassword: password } };
   });
+  r.get('/console/api/support-log', async (req) => {
+    const w = await who(req);
+    const rows = (await q(
+      `SELECT a.time, a.action, a.target, a.detail, u.email FROM audit_log a
+       LEFT JOIN users u ON u.id::text = split_part(a.actor, ':', 2)
+       WHERE a.org_id = $1 AND (a.actor LIKE 'support:%' OR a.action LIKE 'support.%') ORDER BY a.time DESC LIMIT 100`, [w.orgId])).rows;
+    return { body: { entries: rows } };
+  });
   r.post('/console/api/password', async (req) => {
     const w = await who(req);
+    if (w.support) throw new HttpError(403, 'forbidden', 'Support sessions cannot change passwords');
     const u = (await q(`SELECT password_hash FROM users WHERE id = $1`, [w.userId])).rows[0];
     if (!(await verifyPassword(str(req.body?.current, 'current', 500), u.password_hash))) throw new HttpError(400, 'wrong_password', 'Current password is incorrect');
     const next = str(req.body?.next, 'next', 500);

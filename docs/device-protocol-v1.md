@@ -365,3 +365,28 @@ Devices that cannot use MQTT may `POST https://titan.kitovu.com.ng/api/ingest` w
 | Motion | On state change only | On state change only |
 
 All values are editable in the Titan admin panel.
+
+## 14. v1.1 additions: LoRa gateways and compact readings
+
+**Gateway relaying.** A LoRa gateway (`titan-lora-gateway-v1`) connects to the broker with its own credentials. For each node assigned to it in Titan, it may:
+- publish the node's signed envelopes, unchanged, to `titan/v1/<nodeId>/up/telemetry|event|state|ack`
+- subscribe to `titan/v1/<nodeId>/down/#` and forward configs and commands over LoRa
+
+It may not publish a node's `up/lwt`, and it cannot publish for unassigned nodes. Titan verifies every relayed message against the **node's** key, so a gateway can delay or drop data but cannot alter or invent it. The gateway reports its own health on its own `up/state` topic.
+
+**Compact readings.** To fit LoRa payloads, a reading may be an array `[metric, value, channel]` (or `[metric, value, channel, cal]`) instead of an object. The metric may be a short code:
+
+| Code | Metric | Code | Metric | Code | Metric |
+|---|---|---|---|---|---|
+| `at` | air.temperature | `ah` | air.humidity | `ac` | air.co2 |
+| `pm` | produce.moisture | `pr` | produce.moisture_raw | `pt` | produce.temperature |
+| `pw` | produce.weight | `sm` | security.motion | `sd` | security.door |
+| `wt` | water.temperature | `wp` | water.ph | `wd` | water.do |
+| `we` | water.ec | `wl` | water.level | `sl` | soil.moisture |
+| `kt` | kiln.temperature | `fm` | feedstock.mass | `bm` | biochar.mass |
+| `st` | stove.temperature | `se` | stove.energy | `lm` | lpg.mass |
+| `so` | solar.energy | `sp` | solar.power | `bs` | power.battery_soc |
+| `pv` | power.voltage | `es` | equipment.state | `al` | appliance.locked |
+| `ad` | appliance.door_opens | | | | |
+
+Example compact body: `{"v":1,"dev":"CK-000123","seq":88,"ts":1763022600,"up":5000,"buf":true,"r":[["st",182.5,"s1"],["bs",88,"bat"]]}`

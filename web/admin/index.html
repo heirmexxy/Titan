@@ -387,6 +387,7 @@
             <div><button class="primary" type="submit">Save and send to device</button></div>
             <p class="form-msg small" style="grid-column:1/-1"></p>
           </form>
+          ${raw(dv.type_id !== 'titan-lora-gateway-v1' ? `<form class="f" id="gw-form" style="margin-top:1rem"><label>Reaches Titan through LoRa gateway<input name="gatewayId" value="${esc(dv.gateway_id ?? '')}" placeholder="none (connects directly)"></label><div><button type="submit">Save</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>` : '<p class="small muted" style="margin-top:1rem">This is a LoRa gateway. Assign nodes to it from their own pages.</p>')}
           <h2 style="margin-top:1.2rem">Commands</h2>
           <div id="cmds"><p class="empty">Loading…</p></div>
           <div class="row" style="margin-top:.75rem">
@@ -418,6 +419,7 @@
       route();
     });
     loadCommands(id);
+    bindForm('#gw-form', async (d) => { await api('POST', `/devices/${encodeURIComponent(id)}/gateway`, { gatewayId: d.gatewayId || null }); toast('Saved'); route(); });
     onClick('#new-code', async () => {
       const out = await api('POST', `/devices/${encodeURIComponent(id)}/code`);
       app.querySelector('#code-out').innerHTML = h`<div class="secret">New provisioning code: <code>${out.provisioningCode}</code><br><span class="small">Valid ${out.expiresInDays} days. Use it to re-provision or rotate the device key.</span></div>`;
@@ -557,6 +559,12 @@
             <div><button class="primary" type="submit">Create key</button></div><p class="form-msg small" style="grid-column:1/-1"></p>
           </form><div id="key-out"></div>` : '<p class="muted">Only admins can create keys.</p>')}</div>
       </div>
+      <div class="panel"><h2>Open a client's console</h2>
+        <p class="small muted">Act inside a customer's console to resolve something for them. The session lasts one hour, the reason and every action are logged, and the customer can see this in their settings.</p>
+        <form class="f" id="support-form">
+          <label>Organisation<select name="orgId">${raw(orgs.filter((o) => o.kind !== 'kitovu').map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join(''))}</select></label>
+          <label style="grid-column:span 2">Reason<input name="reason" required placeholder="e.g. Customer asked us to fix gateway assignment (ticket 142)"></label>
+          <div><button class="primary" type="submit">Open their console</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>
       ${raw(admin ? `<div class="panel"><h2>Give a client console access</h2>
         <p class="small muted">They sign in at <code>/console</code> to manage their own sites, devices, keys, sharing and billing.</p>
         <form class="f" id="client-user-form">
@@ -580,6 +588,11 @@
       app.querySelector('#key-out').innerHTML = h`<div class="secret">Copy this key now. It won't be shown again.<br><code>${out.key}</code></div>`;
     });
     onClick('[data-revoke]', async (d) => { await api('POST', `/apikeys/${d.revoke}/revoke`); toast('Key revoked'); route(); });
+    bindForm('#support-form', async (d) => {
+      const out = await api('POST', `/orgs/${d.orgId}/support-session`, { reason: d.reason });
+      toast(`Opening ${out.org}'s console for ${out.expiresInMinutes} minutes`);
+      window.open(out.url, '_blank');
+    });
     bindForm('#client-user-form', async (d, form) => {
       const out = await api('POST', `/orgs/${d.orgId}/users`, d);
       form.reset();

@@ -168,6 +168,18 @@
   .form-msg.ok { color: #8FD3AE; }
   .form-msg.err { color: #F3A796; }
 
+
+  /* Demo videos by use case */
+  .demo-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.5rem 0 1rem; }
+  .demo-tabs button { font: inherit; font-weight: 600; padding: .55rem 1rem; border-radius: 999px; border: 2px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+  .demo-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+  .demo-player { display: grid; grid-template-columns: 1.6fr 1fr; gap: 2rem; align-items: start; }
+  .demo-player > * { min-width: 0; }
+  @media (max-width: 860px) { .demo-player { grid-template-columns: 1fr; } }
+  .demo-player video { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: var(--ink); display: block; box-shadow: 0 30px 60px -30px rgba(20,33,61,.55); }
+  .demo-side h3 { font-size: 1.35rem; }
+  .demo-side p { color: var(--ink-soft); }
+
   footer { padding: 2.5rem 0; font-size: .9rem; color: var(--ink-soft); }
   footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
 </style>
@@ -178,7 +190,7 @@
   <div class="wrap">
     <a class="brand" href="/" aria-label="Titan by Kitovu, home"><b>Titan</b><span>by Kitovu</span></a>
     <nav class="top" aria-label="Main">
-      <a class="hide-sm" href="#how">How it works</a>
+      <a class="hide-sm" href="#watch">Watch a demo</a>
       <a class="hide-sm" href="#developers">Developers</a>
       <a class="hide-sm" href="#pricing">Pricing</a>
       <a href="#demo">Book a demo</a>
@@ -195,7 +207,7 @@
         <p class="lede">Titan connects your warehouse, farm, energy and carbon sensors to one place. You get alerts the moment something goes wrong, control over the equipment that fixes it, and data your systems, lenders and carbon verifiers can trust.</p>
         <div class="actions">
           <a class="btn btn-primary" href="#demo">Book a demo</a>
-          <a class="btn btn-ghost" href="#how">See how it works</a>
+          <a class="btn btn-ghost" href="#watch">Watch a demo</a>
         </div>
       </div>
 
@@ -271,6 +283,32 @@
           <p>Send data to your own systems through the API. Give lenders, insurers or buyers access to exactly the sites and readings you choose, and take it back any time.</p>
         </li>
       </ol>
+    </div>
+  </section>
+
+
+  <!-- DEMO VIDEOS -->
+  <section id="watch" aria-labelledby="watch-title">
+    <div class="wrap">
+      <h2 id="watch-title" class="display">See Titan on a site like yours</h2>
+      <p class="lede">Short demos for each use case, under a minute each. Prefer to talk it through? Book a live demo and we'll show it on your own devices.</p>
+      <div class="demo-tabs" role="tablist" aria-label="Demo videos by use case">
+        <button role="tab" aria-selected="true" aria-controls="demo-video" data-key="warehouses">Warehouses</button>
+        <button role="tab" aria-selected="false" aria-controls="demo-video" data-key="aquaponics">Fish farms</button>
+        <button role="tab" aria-selected="false" aria-controls="demo-video" data-key="payg">Pay-as-you-go solar</button>
+        <button role="tab" aria-selected="false" aria-controls="demo-video" data-key="cookstoves">Cookstoves</button>
+        <button role="tab" aria-selected="false" aria-controls="demo-video" data-key="biochar">Biochar</button>
+      </div>
+      <div class="demo-player">
+        <video id="demo-video" controls playsinline preload="metadata" poster="videos/warehouses.jpg" src="videos/warehouses.mp4" aria-label="Demo video: warehouses"></video>
+        <div class="demo-side">
+          <h3 id="demo-title">Stored grain, watched and proven</h3>
+          <p id="demo-text">Moisture, temperature and intruders in every stack, alerts by SMS, and a storage-condition report lenders can pull for any warehouse receipt.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="#demo">Book a live demo</a>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -456,6 +494,27 @@ curl https://titan.kitovu.com.ng/v1/readings \
   }
   for (let n = 0; n < 5; n++) row(false);
   if (!reduce) setInterval(() => row(true), 2600);
+
+
+  // Demo videos by use case
+  const demos = {
+    warehouses: ['Stored grain, watched and proven', 'Moisture, temperature and intruders in every stack, alerts by SMS, and a storage-condition report lenders can pull for any warehouse receipt.'],
+    aquaponics: ['Oxygen crashes caught before the fish notice', 'Dissolved oxygen in every tank, alerts when it drops, and automations that switch on aerators and log every command.'],
+    payg: ['Solar appliances lenders can see', 'Usage and solar output from every unit, lock and unlock as payments arrive, and data shared with your lender for exactly the loan period.'],
+    cookstoves: ['Cooking measured, not surveyed', 'A sensor on each stove records real cooking sessions, which become fuel saved and tonnes of CO₂e.'],
+    biochar: ['Every tonne traced back to the kiln', 'Kiln temperatures, weights and lab results become tonnes of carbon removed, with every input traceable for verifiers.'],
+  };
+  const video = document.getElementById('demo-video');
+  document.querySelectorAll('.demo-tabs button').forEach((btn) => btn.addEventListener('click', () => {
+    document.querySelectorAll('.demo-tabs button').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    const k = btn.dataset.key;
+    video.poster = `videos/${k}.jpg`;
+    video.src = `videos/${k}.mp4`;
+    video.setAttribute('aria-label', `Demo video: ${btn.textContent}`);
+    document.getElementById('demo-title').textContent = demos[k][0];
+    document.getElementById('demo-text').textContent = demos[k][1];
+    video.play().catch(() => {});
+  }));
 
   // Plans published in the Titan admin panel; falls back to "Talk to us".
   fetch('/api/public/plans').then((r) => r.ok ? r.json() : null).then((j) => {

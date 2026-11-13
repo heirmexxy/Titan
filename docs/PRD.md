@@ -116,6 +116,12 @@ Webhooks are signed: header `X-Titan-Signature: t=<unix>,v1=<hex HMAC-SHA256(sec
 ### 5.12 Retention
 Retention is set per organisation (default 2 years, up to 20) so carbon projects can keep data for their full crediting period. A nightly job removes readings and raw messages past each organisation's period.
 
+### 5.13 AI agents (MCP)
+`POST /mcp` implements the Model Context Protocol (Streamable HTTP, JSON responses). Authenticated with a Titan API key; every tool forwards to the REST API with that key, so agents inherit its scopes, grants, rate limits and audit trail. Device control tools appear only for keys with `control:devices` and are marked as actions that change the physical world.
+
+### 5.14 Client console
+`/console` for client owners and members: sites, zones and stacks; device registration under the organisation's prefix with provisioning codes; device charts and controls (commands allowed for API use); alerts; alert rules and contacts; sharing (grants by Organisation ID); API keys and webhooks; carbon (read); invoices with Paystack payment; team. Members can view and acknowledge alerts only. Kitovu creates the first owner login from the admin dashboard.
+
 ## 6. Non-functional
 
 - Hosting: second Hostinger KVM 2 (the one not running Abia ADDS), native installs (no Docker): PostgreSQL 16 + TimescaleDB, EMQX, Node 22 under systemd, Nginx + Let's Encrypt.

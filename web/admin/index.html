@@ -557,6 +557,13 @@
             <div><button class="primary" type="submit">Create key</button></div><p class="form-msg small" style="grid-column:1/-1"></p>
           </form><div id="key-out"></div>` : '<p class="muted">Only admins can create keys.</p>')}</div>
       </div>
+      ${raw(admin ? `<div class="panel"><h2>Give a client console access</h2>
+        <p class="small muted">They sign in at <code>/console</code> to manage their own sites, devices, keys, sharing and billing.</p>
+        <form class="f" id="client-user-form">
+          <label>Organisation<select name="orgId">${orgs.filter((o) => o.kind !== 'kitovu').map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
+          <label>Email<input name="email" type="email" required></label><label>Name<input name="name"></label>
+          <label>Role<select name="role"><option value="client_owner">Owner</option><option value="client_member">Member</option></select></label>
+          <div><button type="submit">Create login</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="client-out"></div></div>` : '')}
       <div class="panel"><h2>Organisations</h2><div class="scroll"><table><thead><tr><th>Name</th><th>Type</th><th>Prefix</th><th class="r">Sites</th><th class="r">Devices</th><th>Plan</th><th class="r">Keeps data</th><th>ID</th></tr></thead><tbody>
         ${raw(orgs.map((o) => `<tr><td>${esc(o.name)}</td><td>${esc(o.kind)}</td><td>${esc(o.device_prefix ?? '')}</td><td class="r num">${o.sites}</td><td class="r num">${o.devices}</td><td>${esc(o.plan_id ?? '–')}</td><td class="r num">${Math.round(Number(o.retention_days) / 365 * 10) / 10} yrs</td><td><code class="small">${esc(o.id)}</code></td></tr>`).join(''))}
       </tbody></table></div>
@@ -573,6 +580,11 @@
       app.querySelector('#key-out').innerHTML = h`<div class="secret">Copy this key now. It won't be shown again.<br><code>${out.key}</code></div>`;
     });
     onClick('[data-revoke]', async (d) => { await api('POST', `/apikeys/${d.revoke}/revoke`); toast('Key revoked'); route(); });
+    bindForm('#client-user-form', async (d, form) => {
+      const out = await api('POST', `/orgs/${d.orgId}/users`, d);
+      form.reset();
+      app.querySelector('#client-out').innerHTML = h`<div class="secret">${out.email} can sign in at <b>${location.origin}/console</b> with temporary password <code>${out.temporaryPassword}</code>.</div>`;
+    });
     bindForm('#ret-form', async (d) => { await api('POST', `/orgs/${d.orgId}/retention`, { days: Number(d.days) }); toast('Retention saved'); route(); });
   };
 

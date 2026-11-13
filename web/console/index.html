@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titan Console</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14213D; --ink-soft: #4A5875; --muted: #6B778F; --paper: #EEF2F0; --panel: #FFFFFF; --mist: #D5DEDA; --line: #E4EAE7;
+    --grain: #E2B23A; --leaf: #2F7D5B; --leaf-bg: #DDEFE5; --alert: #C8462F; --alert-bg: #F6E3DE; --warn: #9A6A00; --warn-bg: #FBF0D5;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Archivo', system-ui, sans-serif; font-variation-settings: 'wdth' 100; background: var(--paper); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--grain); outline-offset: 2px; }
+  h1 { font-variation-settings: 'wdth' 120; font-weight: 800; font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 1rem; }
+  h2 { font-variation-settings: 'wdth' 112; font-weight: 700; font-size: 1.1rem; margin: 0 0 .75rem; }
+  .num { font-variation-settings: 'wdth' 70; font-feature-settings: 'tnum'; }
+
+  .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  aside { background: var(--ink); color: var(--paper); padding: 1.1rem .8rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  aside .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 1.35rem; padding: 0 .5rem 1rem; }
+  aside .brand span { font-variation-settings: 'wdth' 100; font-weight: 400; font-size: .8rem; color: #AFC0BA; margin-left: .3rem; }
+  aside nav a { display: flex; justify-content: space-between; padding: .5rem .6rem; border-radius: 6px; text-decoration: none; color: #DCE6E2; }
+  aside nav a:hover { background: #22325A; }
+  aside nav a[aria-current="page"] { background: #2A3C66; color: #fff; font-weight: 600; }
+  aside nav .badge { background: var(--alert); color: #fff; border-radius: 10px; padding: 0 .45rem; font-size: .8rem; }
+  aside .who { margin-top: 1.5rem; padding: .6rem; font-size: .85rem; color: #AFC0BA; border-top: 1px solid #2A3C66; }
+  aside .who button { margin-top: .4rem; }
+  main { padding: 1.5rem 2rem 3rem; min-width: 0; }
+  @media (max-width: 860px) {
+    .shell { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; }
+    aside nav { display: flex; flex-wrap: wrap; gap: .2rem; }
+    main { padding: 1rem; }
+  }
+
+  .panel { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1.25rem; min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .grid2 > * { min-width: 0; }
+  @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+  .tile { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: .9rem 1rem; }
+  .tile .v { font-size: 2rem; line-height: 1.1; font-variation-settings: 'wdth' 70; font-weight: 600; }
+  .tile .l { color: var(--muted); font-size: .88rem; }
+  .tile.bad .v { color: var(--alert); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .55rem .6rem .55rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .85rem; }
+  .scroll { overflow-x: auto; }
+  td.r, th.r { text-align: right; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: #F6F9F7; }
+
+  .pill { display: inline-flex; align-items: center; gap: .3rem; padding: .05rem .5rem; border-radius: 10px; font-size: .82rem; font-weight: 600; white-space: nowrap; }
+  .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .st-online, .sev-info { color: var(--leaf); background: var(--leaf-bg); }
+  .st-offline, .st-open, .sev-critical { color: var(--alert); background: var(--alert-bg); }
+  .st-registered, .sev-warning, .pending { color: var(--warn); background: var(--warn-bg); }
+  .st-disabled, .st-resolved, .st-acknowledged { color: var(--muted); background: #EEF1F4; }
+
+  button, .btn { font: inherit; font-weight: 600; padding: .45rem .85rem; border-radius: 6px; border: 1px solid var(--ink); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button.danger { border-color: var(--alert); color: var(--alert); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: .2rem .55rem; font-size: .85rem; }
+  aside button { background: transparent; color: #DCE6E2; border-color: #4A5B7A; }
+
+  form.f { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; align-items: end; }
+  form.f label, .lbl { display: grid; gap: .25rem; font-size: .85rem; color: var(--ink-soft); }
+  input, select, textarea { font: inherit; padding: .45rem .55rem; border: 1px solid var(--mist); border-radius: 6px; background: #fff; color: var(--ink); min-width: 0; width: 100%; }
+  textarea { min-height: 70px; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .muted { color: var(--muted); }
+  .small { font-size: .85rem; }
+  .err { color: var(--alert); }
+  .ok { color: var(--leaf); }
+  .secret { background: var(--warn-bg); border: 1px solid #E8D29A; padding: .75rem 1rem; border-radius: 8px; margin: .75rem 0; word-break: break-all; }
+  .secret code { font-size: 1rem; font-weight: 700; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .88em; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .empty { color: var(--muted); padding: .5rem 0; }
+  #toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--ink); color: var(--paper); padding: .7rem 1rem; border-radius: 8px; display: none; max-width: 420px; z-index: 10; }
+
+  /* chart */
+  .chart { position: relative; }
+  .chart svg { width: 100%; height: 260px; display: block; }
+  .chart .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); padding: .4rem .6rem; border-radius: 6px; font-size: .82rem; display: none; white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: .9rem; font-size: .85rem; color: var(--ink-soft); margin-top: .4rem; }
+  .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: .35rem; }
+
+  .login { max-width: 380px; margin: 12vh auto; }
+  .login .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 2rem; margin-bottom: 1rem; }
+  .login form { display: grid; gap: .8rem; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status"></div>
+<script>
+
+(() => {
+  const app = document.getElementById('app');
+  let me = null;
+  const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'];
+  const KINDS = ['warehouse', 'aquaponics', 'hydroponics', 'greenhouse', 'cold_room', 'poultry', 'field', 'energy', 'other'];
+
+  // ---------- helpers ----------
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const h = (strings, ...vals) => strings.reduce((out, s, i) => out + s + (i < vals.length ? (vals[i] && vals[i].__html !== undefined ? vals[i].__html : esc(vals[i])) : ''), '');
+  const raw = (html) => ({ __html: html });
+  const ago = (t) => {
+    if (!t) return 'never';
+    const s = Math.round((Date.now() - new Date(t).getTime()) / 1000);
+    if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.round(s / 60)}m ago`; if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return new Date(t).toLocaleDateString();
+  };
+  const when = (t) => t ? new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const fmt = (v) => { const n = Number(v); return Number.isFinite(n) ? (Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2)) : '–'; };
+  const pill = (cls, text) => raw(`<span class="pill ${esc(cls)}">${esc(text)}</span>`);
+  const toast = (msg) => { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 4000); };
+
+  async function api(method, path, body) {
+    const res = await fetch('/console/api' + path, {
+      method, credentials: 'same-origin',
+      headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(method !== 'GET' ? { 'X-Titan-Console': '1' } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401 && path !== '/login') { me = null; renderLogin(); throw new Error('Signed out'); }
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : {};
+    if (!res.ok) throw new Error(json.message || json.error || `Request failed (${res.status})`);
+    return json;
+  }
+  const formData = (form) => Object.fromEntries(new FormData(form));
+  function bindForm(sel, fn) {
+    const form = app.querySelector(sel);
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button[type=submit]');
+      const msg = form.querySelector('.form-msg');
+      if (btn) btn.disabled = true;
+      if (msg) { msg.textContent = ''; msg.className = 'form-msg small'; }
+      try { await fn(formData(form), form); }
+      catch (err) { if (msg) { msg.textContent = err.message; msg.className = 'form-msg small err'; } else toast(err.message); }
+      finally { if (btn) btn.disabled = false; }
+    });
+  }
+  function onClick(sel, fn) {
+    app.querySelectorAll(sel).forEach((el) => el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      el.disabled = true;
+      try { await fn(el.dataset, el); } catch (err) { toast(err.message); } finally { el.disabled = false; }
+    }));
+  }
+  const options = (items, sel, valueKey = 'id', labelFn = (x) => x.name) =>
+    raw(items.map((x) => `<option value="${esc(x[valueKey])}" ${String(x[valueKey]) === String(sel) ? 'selected' : ''}>${esc(labelFn(x))}</option>`).join(''));
+
+
+  // Line chart: one line per channel, crosshair tooltip, legend for 2+ channels.
+  async function loadChart(id, metric, hours, meta) {
+    const el = app.querySelector('#chart');
+    let data;
+    try { data = await api('GET', `/devices/${encodeURIComponent(id)}/series?metric=${encodeURIComponent(metric)}&hours=${hours}`); }
+    catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+    if (!data.points.length) { el.innerHTML = '<p class="empty">No readings in this period.</p>'; return; }
+    const channels = [...new Set(data.points.map((p) => p.channel))].slice(0, 4);
+    const W = 900, H = 260, L = 48, R = 12, T = 12, B = 28;
+    const ts = data.points.map((p) => new Date(p.t).getTime());
+    const t0 = Math.min(...ts), t1 = Math.max(...ts) || t0 + 1;
+    let v0 = Math.min(...data.points.map((p) => p.avg)), v1 = Math.max(...data.points.map((p) => p.avg));
+    if (v0 === v1) { v0 -= 1; v1 += 1; }
+    const pad = (v1 - v0) * 0.1; v0 -= pad; v1 += pad;
+    const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
+    const y = (v) => T + (1 - (v - v0) / (v1 - v0)) * (H - T - B);
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => v0 + f * (v1 - v0));
+    const series = channels.map((ch, i) => ({ ch, color: SERIES[i], pts: data.points.filter((p) => p.channel === ch).map((p) => ({ t: new Date(p.t).getTime(), v: p.avg, min: p.min, max: p.max })) }));
+    const tfmt = (t) => new Date(t).toLocaleString([], Number(hours) > 48 ? { month: 'short', day: 'numeric' } : Number(hours) > 6 ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(meta?.label ?? metric)} over the last ${esc(hours)} hours">
+      ${ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#E4EAE7" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#6B778F">${fmt(v)}</text>`).join('')}
+      <text x="${L}" y="${H - 8}" font-size="11" fill="#6B778F">${esc(tfmt(t0))}</text>
+      <text x="${W - R}" y="${H - 8}" font-size="11" fill="#6B778F" text-anchor="end">${esc(tfmt(t1))}</text>
+      ${series.map((s) => `<polyline fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="${s.pts.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')}"/>`).join('')}
+      <line id="xh" y1="${T}" y2="${H - B}" stroke="#14213D" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>
+      <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/>
+    </svg><div class="tip"></div>
+    ${series.length > 1 ? `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.ch)}</span>`).join('')}</div>` : `<div class="legend"><span>${esc(series[0].ch)} · ${esc(meta?.unit ?? '')} · ${esc(data.bucket)} averages</span></div>`}`;
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), xh = el.querySelector('#xh');
+    const all = [...new Set(series.flatMap((s) => s.pts.map((p) => p.t)))].sort((a, b) => a - b);
+    el.querySelector('#hit').addEventListener('mousemove', (e) => {
+      const box = svg.getBoundingClientRect();
+      const tx = t0 + ((e.clientX - box.left) / box.width * W - L) / (W - L - R) * (t1 - t0);
+      const near = all.reduce((a, b) => (Math.abs(b - tx) < Math.abs(a - tx) ? b : a), all[0]);
+      xh.setAttribute('x1', x(near)); xh.setAttribute('x2', x(near)); xh.setAttribute('opacity', '0.35');
+      const rows = series.map((s) => { const p = s.pts.find((q) => q.t === near); return p ? `<div><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:.35rem"></i>${esc(s.ch)}: <b>${fmt(p.v)}</b> ${esc(meta?.unit ?? '')} <span style="opacity:.7">(${fmt(p.min)}–${fmt(p.max)})</span></div>` : ''; }).join('');
+      tip.innerHTML = `<div style="opacity:.75">${esc(new Date(near).toLocaleString())}</div>${rows}`;
+      tip.style.display = 'block';
+      const px = (x(near) / W) * box.width;
+      tip.style.left = Math.min(px + 12, box.width - tip.offsetWidth) + 'px';
+      tip.style.top = '8px';
+    });
+    el.querySelector('#hit').addEventListener('mouseleave', () => { tip.style.display = 'none'; xh.setAttribute('opacity', '0'); });
+  }
+
+
+  // ---------- layout ----------
+  const NAV = [['overview', 'Overview'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'], ['sharing', 'Sharing'], ['api', 'API & webhooks'], ['carbon', 'Carbon'], ['billing', 'Billing'], ['settings', 'Settings']];
+  let openAlerts = 0;
+  const isOwner = () => me && me.role === 'client_owner';
+  function layout(active, content) {
+    app.innerHTML = h`<div class="shell">
+      <aside>
+        <div class="brand">Titan<span>${me.orgName}</span></div>
+        <nav aria-label="Console">${raw(NAV.map(([k, label]) => `<a href="#${k}" ${k === active ? 'aria-current="page"' : ''}>${esc(label)}${k === 'alerts' && openAlerts ? `<span class="badge">${openAlerts}</span>` : ''}</a>`).join(''))}</nav>
+        <div class="who">${me.email}<br>${isOwner() ? 'Account owner' : 'Team member'}<br><button class="small" id="logout">Sign out</button></div>
+      </aside>
+      <main>${raw(content)}</main>
+    </div>`;
+    app.querySelector('#logout').onclick = async () => { await api('POST', '/logout'); me = null; renderLogin(); };
+  }
+  function renderLogin() {
+    app.innerHTML = `<div class="login panel">
+      <div class="brand">Titan</div>
+      <p class="muted">Sign in to your organisation's console.</p>
+      <form id="login-form">
+        <label class="lbl">Email<input name="email" type="email" autocomplete="username" required></label>
+        <label class="lbl">Password<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">Sign in</button>
+        <p class="form-msg small"></p>
+      </form></div>`;
+    bindForm('#login-form', async (d) => { await api('POST', '/login', d); me = await api('GET', '/me'); route(); });
+  }
+  const ownerOnly = (html) => (isOwner() ? html : '');
+
+  const views = {};
+  function bindRowLinks() { app.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => (location.hash = tr.dataset.href))); }
+  function alertTable(alerts) {
+    if (!alerts.length) return '<p class="empty">Nothing needs attention.</p>';
+    return `<div class="scroll"><table><thead><tr><th>Alert</th><th>Status</th><th>Where</th><th>Opened</th><th></th></tr></thead><tbody>${alerts.map((a) => `
+      <tr><td><span class="pill sev-${esc(a.severity)}">${esc(a.severity)}</span> ${esc(a.title)}</td><td><span class="pill st-${esc(a.status)}">${esc(a.status)}</span></td>
+      <td>${esc(a.site_name ?? '')}${a.device_id ? `<div class="small"><a href="#device-${esc(a.device_id)}">${esc(a.device_id)}</a></div>` : ''}</td><td class="small">${esc(ago(a.opened_at))}</td>
+      <td class="r"><div class="row" style="justify-content:flex-end">${a.status === 'open' ? `<button class="small" data-ack="${esc(a.id)}">Acknowledge</button>` : ''}${a.status !== 'resolved' ? `<button class="small" data-resolve="${esc(a.id)}">Resolve</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function bindAlertButtons() {
+    onClick('[data-ack]', async (d) => { await api('POST', `/alerts/${d.ack}/ack`); toast('Acknowledged'); route(); });
+    onClick('[data-resolve]', async (d) => { await api('POST', `/alerts/${d.resolve}/resolve`); toast('Resolved'); route(); });
+  }
+  function deviceTable(devices) {
+    if (!devices.length) return '<p class="empty">No devices yet.</p>';
+    return `<div class="scroll"><table><thead><tr><th>Device</th><th>Status</th><th>Last seen</th></tr></thead><tbody>${devices.map((dv) => `
+      <tr class="click" data-href="#device-${esc(dv.id)}"><td><code>${esc(dv.id)}</code><div class="small muted">${esc(dv.site_name ?? '')}</div></td>
+      <td><span class="pill st-${esc(dv.status)}">${dv.status === 'registered' ? 'awaiting setup' : esc(dv.status)}</span></td><td class="small">${esc(ago(dv.last_seen_at))}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  views.overview = async () => {
+    const { counts: c, alerts, sites } = await api('GET', '/overview');
+    openAlerts = c.open_alerts;
+    layout('overview', h`<h1>${me.orgName}</h1>
+      <div class="tiles">
+        <div class="tile"><div class="v">${c.online}</div><div class="l">Devices online</div></div>
+        <div class="tile ${Number(c.offline) ? 'bad' : ''}"><div class="v">${c.offline}</div><div class="l">Devices offline</div></div>
+        <div class="tile"><div class="v">${c.awaiting}</div><div class="l">Awaiting setup</div></div>
+        <div class="tile ${Number(c.open_alerts) ? 'bad' : ''}"><div class="v">${c.open_alerts}</div><div class="l">Alerts needing attention</div></div>
+        <div class="tile"><div class="v">${c.shared_with_us}</div><div class="l">Data shares received</div></div>
+        <div class="tile"><div class="v">${Number(c.messages_month).toLocaleString()}</div><div class="l">Messages this month</div></div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Alerts</h2>${raw(alertTable(alerts))}</div>
+        <div class="panel"><h2>Your sites</h2>${raw(sites.length ? `<table><thead><tr><th>Site</th><th class="r">Online</th></tr></thead><tbody>${sites.map((s) => `<tr class="click" data-href="#site-${esc(s.id)}"><td>${esc(s.name)}<div class="small muted">${esc(s.kind)}</div></td><td class="r num">${s.online}/${s.devices}</td></tr>`).join('')}</tbody></table>` : `<p class="empty">No sites yet.${isOwner() ? ' <a href="#sites">Add your first site</a>.' : ''}</p>`)}</div>
+      </div>`);
+    bindAlertButtons(); bindRowLinks();
+  };
+
+  views.alerts = async () => {
+    const { alerts } = await api('GET', '/alerts');
+    openAlerts = alerts.length;
+    layout('alerts', h`<h1>Alerts</h1><div class="panel">${raw(alertTable(alerts))}</div>`);
+    bindAlertButtons();
+  };
+
+  views.sites = async () => {
+    const { sites, shared } = await api('GET', '/sites');
+    layout('sites', h`<h1>Sites</h1>
+      ${raw(ownerOnly(`<div class="panel"><h2>Add a site</h2><form class="f" id="site-form">
+        <label>Name<input name="name" required></label>
+        <label>Type<select name="kind">${KINDS.map((k) => `<option>${k}</option>`).join('')}</select></label>
+        <label>Your reference<input name="externalRef" placeholder="optional"></label>
+        <label>Latitude<input name="lat" inputmode="decimal"></label><label>Longitude<input name="lng" inputmode="decimal"></label>
+        <div><button class="primary" type="submit">Add site</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>`))}
+      <div class="panel"><h2>Your sites</h2>${raw(sites.length ? `<table><thead><tr><th>Site</th><th>Type</th><th class="r">Devices</th></tr></thead><tbody>${sites.map((s) => `<tr class="click" data-href="#site-${esc(s.id)}"><td>${esc(s.name)}</td><td>${esc(s.kind)}</td><td class="r num">${s.devices}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No sites yet.</p>')}</div>
+      ${raw(shared.length ? `<div class="panel"><h2>Shared with you</h2><table><tbody>${shared.map((s) => `<tr class="click" data-href="#site-${esc(s.id)}"><td>${esc(s.name)}</td><td class="muted">${esc(s.owner_name)}</td></tr>`).join('')}</tbody></table></div>` : '')}`);
+    bindRowLinks();
+    bindForm('#site-form', async (d) => { const { site } = await api('POST', '/sites', d); location.hash = `#site-${site.id}`; });
+  };
+
+  views.site = async (id) => {
+    const { site, access, zones, stacks, devices, latest } = await api('GET', `/sites/${id}`);
+    layout('sites', h`<p class="small"><a href="#sites">Sites</a></p><h1>${site.name}</h1>
+      <p class="muted">${access.owned ? site.kind : `Shared by ${site.owner_name}: ${Array.isArray(access.metrics) ? access.metrics.join(', ') : 'all readings'}`}</p>
+      <div class="panel"><h2>Latest readings</h2>${raw(latest.length ? `<div class="scroll"><table><thead><tr><th>Reading</th><th>Channel</th><th>Device</th><th class="r">Value</th><th>When</th></tr></thead><tbody>${latest.map((r) => `<tr><td>${esc(r.metric)}</td><td><code>${esc(r.channel)}</code></td><td>${access.owned ? `<a href="#device-${esc(r.deviceId)}">${esc(r.deviceId)}</a>` : esc(r.deviceId)}</td><td class="r num">${fmt(r.value)}</td><td class="small">${esc(ago(r.time))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No recent readings.</p>')}</div>
+      ${raw(access.owned ? `<div class="grid2">
+        <div class="panel"><h2>Devices</h2>${deviceTable(devices.map((x) => ({ ...x, site_name: '' })))}${isOwner() ? `<p><a href="#devices?site=${esc(site.id)}">Register a device here</a></p>` : ''}</div>
+        <div class="panel"><h2>Zones and stacks</h2>
+          <p class="small muted">Codes must match device channels, e.g. <code>z1/stack-a/sensor</code>.</p>
+          ${zones.length ? `<table><tbody>${zones.map((z) => `<tr><td><code>${esc(z.code)}</code> ${esc(z.name ?? '')}</td><td>${stacks.filter((s) => s.zone_code === z.code).map((s) => `<code>${esc(s.code)}</code> ${esc(s.commodity ?? '')}`).join('<br>') || '<span class="muted">No stacks</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No zones yet.</p>'}
+          ${isOwner() ? `<form class="f" id="zone-form" style="margin-top:1rem"><label>New zone code<input name="code" required placeholder="z1"></label><label>Name<input name="name"></label><div><button type="submit">Add zone</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>
+          ${zones.length ? `<form class="f" id="stack-form" style="margin-top:1rem"><label>Zone<select name="zone">${zones.map((z) => `<option>${esc(z.code)}</option>`).join('')}</select></label><label>Stack code<input name="code" required></label><label>Contents<input name="commodity" placeholder="maize"></label><div><button type="submit">Add stack</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>` : ''}` : ''}
+        </div></div>` : '')}`);
+    bindRowLinks();
+    bindForm('#zone-form', async (d) => { await api('POST', `/sites/${id}/zones`, d); route(); });
+    bindForm('#stack-form', async (d) => { await api('POST', `/sites/${id}/stacks`, d); route(); });
+  };
+
+  views.devices = async (_, params) => {
+    const [{ devices, types, devicePrefix }, { sites }] = await Promise.all([api('GET', '/devices'), api('GET', '/sites')]);
+    layout('devices', h`<h1>Devices</h1>
+      ${raw(ownerOnly(devicePrefix ? `<div class="panel"><h2>Register a device</h2>
+        <p class="small muted">You'll get a one-time provisioning code, valid 7 days, to enter on the device during setup. Your device IDs start with <code>${esc(devicePrefix)}-</code>.</p>
+        <form class="f" id="dev-form">
+          <label>Device ID<input name="id" required placeholder="${esc(devicePrefix)}-000001"></label>
+          <label>Site<select name="siteId" required>${sites.map((s) => `<option value="${esc(s.id)}" ${s.id === params.get('site') ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
+          <label>Type<select name="typeId">${types.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
+          <label>Connection<select name="connectivity"><option value="wifi">Wi-Fi</option><option value="gsm">GSM</option></select></label>
+          <div><button class="primary" type="submit">Register</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="code-out"></div></div>`
+        : '<div class="panel"><p>Your organisation needs a device ID prefix before you can register devices. Email <a href="mailto:titan@kitovu.com.ng">titan@kitovu.com.ng</a>.</p></div>'))}
+      <div class="panel">${raw(deviceTable(devices))}</div>`);
+    bindRowLinks();
+    bindForm('#dev-form', async (d, form) => {
+      const out = await api('POST', '/devices', d);
+      form.reset();
+      app.querySelector('#code-out').innerHTML = h`<div class="secret">Provisioning code for <b>${out.id}</b>: <code>${out.provisioningCode}</code><br><span class="small">Shown once, valid ${out.expiresInDays} days.</span></div>`;
+    });
+  };
+
+  views.device = async (id, params) => {
+    const { device: dv, latest, events, commands } = await api('GET', `/devices/${encodeURIComponent(id)}`);
+    const metrics = [...new Set(latest.map((r) => r.metric))];
+    const metric = params.get('metric') || metrics[0] || 'air.temperature';
+    const hours = params.get('hours') || '24';
+    const st = dv.last_state || {};
+    const needsArgs = (c) => Object.values(c.args).some((a) => !a.optional);
+    const withArgs = commands.available.filter(needsArgs);
+    const simple = commands.available.filter((c) => !needsArgs(c));
+    const input = (k, a) => a.type === 'boolean' ? `<label>${esc(k)}<select name="${esc(k)}"><option value="true">on / true</option><option value="false">off / false</option></select></label>` : `<label>${esc(k)}<input name="${esc(k)}" ${a.optional ? '' : 'required'}></label>`;
+    layout('devices', h`<p class="small"><a href="#devices">Devices</a></p>
+      <div class="row" style="justify-content:space-between"><h1 style="margin:0"><code>${dv.id}</code></h1><span class="pill st-${dv.status}">${dv.status === 'registered' ? 'awaiting setup' : dv.status}</span></div>
+      <p class="muted">${dv.type_id} · ${dv.connectivity === 'gsm' ? 'GSM' : 'Wi-Fi'} · last seen ${ago(dv.last_seen_at)}${st.rssi ? ` · signal ${st.rssi} dBm` : ''}${st.bat ? ` · battery ${st.bat} V` : ''}</p>
+      <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">History</h2>
+        <form class="row" id="chart-form"><select name="metric" aria-label="Reading">${raw(metrics.map((m) => `<option ${m === metric ? 'selected' : ''}>${esc(m)}</option>`).join('') || '<option>air.temperature</option>')}</select>
+        <select name="hours" aria-label="Period">${raw([['6', '6 hours'], ['24', '24 hours'], ['168', '7 days'], ['720', '30 days']].map(([v, l]) => `<option value="${v}" ${v === hours ? 'selected' : ''}>${l}</option>`).join(''))}</select></form></div>
+        <div class="chart" id="chart"><p class="empty">Loading…</p></div></div>
+      <div class="grid2">
+        <div class="panel"><h2>Latest readings</h2>${raw(latest.length ? `<table><tbody>${latest.map((r) => `<tr><td>${esc(r.metric)}</td><td><code>${esc(r.channel)}</code></td><td class="r num">${fmt(r.value)}</td><td class="small">${esc(ago(r.time))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No readings yet.</p>')}</div>
+        <div class="panel"><h2>Control</h2>
+          ${raw(!isOwner() ? '<p class="muted">Only account owners can send commands.</p>' : (simple.length || withArgs.length) ? `
+            <div class="row">${simple.map((c) => `<button data-cmd="${esc(c.name)}">${esc(c.label)}</button>`).join('')}</div>
+            ${withArgs.map((c) => `<form class="f cmd-form" data-cmd="${esc(c.name)}" style="margin-top:.75rem"><div class="lbl" style="grid-column:1/-1"><b>${esc(c.label)}</b></div>${Object.entries(c.args).map(([k, a]) => input(k, a)).join('')}<div><button type="submit">Send</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>`).join('')}` : '<p class="muted">This device has no remote controls.</p>')}
+          ${raw(commands.history.length ? `<h2 style="margin-top:1rem">Command log</h2><table><tbody>${commands.history.map((c) => `<tr><td><code>${esc(c.name)}</code> <span class="small muted">${esc(JSON.stringify(c.args) === '{}' ? '' : JSON.stringify(c.args))}</span></td><td><span class="pill ${c.status === 'acked' ? 'st-online' : c.status === 'failed' ? 'st-offline' : 'pending'}">${c.status === 'acked' ? 'done' : esc(c.status)}</span></td><td class="small">${esc(ago(c.sent_at))}</td></tr>`).join('')}</tbody></table>` : '')}
+          ${raw(ownerOnly('<p style="margin-top:1rem"><button id="new-code">New provisioning code</button></p><div id="code-out"></div>'))}
+        </div>
+      </div>
+      <div class="panel"><h2>Events</h2>${raw(events.length ? `<table><tbody>${events.map((e) => `<tr><td><span class="pill sev-${esc(e.severity)}">${esc(e.code)}</span> ${esc(e.message ?? '')}</td><td class="small">${esc(when(e.time))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No events.</p>')}</div>`);
+    app.querySelector('#chart-form').addEventListener('change', (e) => { const d = formData(e.currentTarget); location.hash = `#device-${id}?metric=${encodeURIComponent(d.metric)}&hours=${d.hours}`; });
+    loadChart(id, metric, hours, { label: metric, unit: '' });
+    onClick('button[data-cmd]', async (d) => { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: d.cmd }); toast('Command sent'); route(); });
+    app.querySelectorAll('form.cmd-form').forEach((f) => f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: f.dataset.cmd, args: formData(f) }); toast('Command sent'); route(); }
+      catch (err) { const m = f.querySelector('.form-msg'); m.className = 'form-msg small err'; m.textContent = err.message; }
+    }));
+    onClick('#new-code', async () => { const out = await api('POST', `/devices/${encodeURIComponent(id)}/code`); app.querySelector('#code-out').innerHTML = h`<div class="secret">Provisioning code: <code>${out.provisioningCode}</code></div>`; });
+  };
+
+  views.rules = async () => {
+    const [{ rules, contacts, metrics }, { sites }] = await Promise.all([api('GET', '/rules'), api('GET', '/sites')]);
+    layout('rules', h`<h1>Alert rules</h1>
+      ${raw(ownerOnly(`<div class="panel"><h2>Add a rule</h2><form class="f" id="rule-form">
+        <label>Site<select name="siteId"><option value="">All sites</option>${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+        <label>Reading<select name="metric">${metrics.map((m) => `<option value="${esc(m.key)}">${esc(m.label)} (${esc(m.unit)})</option>`).join('')}</select></label>
+        <label>When it is<select name="op"><option value="gt">above</option><option value="lt">below</option></select></label>
+        <label>Limit<input name="threshold" inputmode="decimal" required></label>
+        <label>For at least (minutes)<input name="minutes" inputmode="numeric" value="0"></label>
+        <label>Severity<select name="severity"><option>warning</option><option>critical</option><option>info</option></select></label>
+        <div><button class="primary" type="submit">Add rule</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>`))}
+      <div class="panel">${raw(rules.length ? `<table><tbody>${rules.map((r) => `<tr><td>${esc(r.metric)} ${r.op === 'gt' ? 'above' : 'below'} <b>${esc(r.threshold)}</b>${Number(r.duration_s) ? ` for ${Math.round(r.duration_s / 60)} min` : ''}<div class="small muted">${esc(r.site_name ?? 'all sites')}</div></td><td><span class="pill sev-${esc(r.severity)}">${esc(r.severity)}</span></td><td class="r">${isOwner() ? `<button class="small" data-toggle="${esc(r.id)}">${r.enabled === true ? 'Turn off' : 'Turn on'}</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No rules yet.</p>')}</div>
+      <div class="panel"><h2>Who gets alerted</h2>
+        ${raw(contacts.length ? `<table><tbody>${contacts.map((c) => `<tr><td>${c.channel === 'sms' ? 'SMS' : 'Email'} ${esc(c.address)}<div class="small muted">${esc(c.site_name ?? 'all sites')}, ${esc(c.min_severity)} and above</div></td><td class="r">${isOwner() ? `<button class="small danger" data-del="${esc(c.id)}">Remove</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Nobody yet.</p>')}
+        ${raw(ownerOnly(`<form class="f" id="contact-form" style="margin-top:1rem"><label>By<select name="channel"><option value="email">Email</option><option value="sms">SMS</option></select></label><label>Address or phone<input name="address" required></label><label>Minimum severity<select name="minSeverity"><option>warning</option><option>critical</option><option>info</option></select></label><div><button type="submit">Add</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>`))}
+      </div>`);
+    bindForm('#rule-form', async (d) => { await api('POST', '/rules', { ...d, durationS: Number(d.minutes || 0) * 60 }); route(); });
+    bindForm('#contact-form', async (d) => { await api('POST', '/contacts', d); route(); });
+    onClick('[data-toggle]', async (d) => { await api('POST', `/rules/${d.toggle}/toggle`); route(); });
+    onClick('[data-del]', async (d) => { await api('DELETE', `/contacts/${d.del}`); route(); });
+  };
+
+  views.sharing = async () => {
+    const { given, received, sites, orgId } = await api('GET', '/grants');
+    const { metrics } = await api('GET', '/rules');
+    layout('sharing', h`<h1>Sharing</h1>
+      <p class="muted">Give lenders, insurers, buyers or verifiers access to exactly the sites and readings you choose. You can stop sharing at any time. Your Organisation ID, for others to share with you: <code>${orgId}</code></p>
+      ${raw(ownerOnly(`<div class="panel"><h2>Share data</h2><form class="f" id="grant-form">
+        <label>Their Organisation ID<input name="granteeOrgId" required></label>
+        <label>Site<select name="siteId"><option value="">All my sites</option>${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+        <label>Readings<select name="metrics" multiple size="5">${metrics.map((m) => `<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}</select></label>
+        <label>From<input name="validFrom" type="date"></label><label>Until<input name="validTo" type="date"></label>
+        <label>Live alerts to them<select name="live"><option value="true">Yes</option><option value="false">No</option></select></label>
+        <div><button class="primary" type="submit">Share</button></div><p class="form-msg small" style="grid-column:1/-1">Leave readings unselected to share all of them.</p></form></div>`))}
+      <div class="grid2">
+        <div class="panel"><h2>You share with</h2>${raw(given.length ? `<table><tbody>${given.map((g) => `<tr><td>${esc(g.grantee_name)}<div class="small muted">${g.site_ids ? `${g.site_ids.length} site(s)` : 'all sites'} · ${g.metrics ? esc(g.metrics.join(', ')) : 'all readings'}${g.valid_to ? ' · until ' + esc(String(g.valid_to).slice(0, 10)) : ''}</div></td><td class="r">${isOwner() ? `<button class="small danger" data-revoke="${esc(g.id)}">Stop sharing</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">You are not sharing anything.</p>')}</div>
+        <div class="panel"><h2>Shared with you</h2>${raw(received.length ? `<table><tbody>${received.map((g) => `<tr><td>${esc(g.owner_name)}<div class="small muted">${g.site_ids ? `${g.site_ids.length} site(s)` : 'all sites'} · ${g.metrics ? esc(g.metrics.join(', ')) : 'all readings'}</div></td></tr>`).join('')}</tbody></table><p><a href="#sites">See shared sites</a></p>` : '<p class="empty">Nothing yet.</p>')}</div>
+      </div>`);
+    const form = app.querySelector('#grant-form');
+    if (form) form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = formData(form);
+      const chosen = [...form.querySelector('select[name=metrics]').selectedOptions].map((o) => o.value);
+      const msg = form.querySelector('.form-msg');
+      try {
+        const out = await api('POST', '/grants', { granteeOrgId: d.granteeOrgId.trim(), siteIds: d.siteId ? [d.siteId] : null, metrics: chosen.length ? chosen : null, validFrom: d.validFrom || null, validTo: d.validTo || null, live: d.live === 'true' });
+        toast(`Now sharing with ${out.granteeName}`); route();
+      } catch (err) { msg.className = 'form-msg small err'; msg.textContent = err.message; }
+    });
+    onClick('[data-revoke]', async (d) => { await api('DELETE', `/grants/${d.revoke}`); toast('Sharing stopped'); route(); });
+  };
+
+  views.api = async () => {
+    const { keys, webhooks, scopes } = await api('GET', '/keys');
+    layout('api', h`<h1>API & webhooks</h1>
+      <p class="muted">Connect your own systems or AI agents. See the <a href="/docs/">Integration Guide</a>. AI agents can connect to <code>${location.origin}/mcp</code> with an API key.</p>
+      ${raw(ownerOnly(`<div class="panel"><h2>Create an API key</h2><form class="f" id="key-form"><label>Used by<input name="name" required placeholder="Farm app"></label>
+        <fieldset style="grid-column:1/-1;border:0;padding:0;margin:0" class="row small">${scopes.map((s, i) => `<label class="row" style="gap:.3rem"><input type="checkbox" name="scope_${i}" value="${s}" ${i < 2 ? 'checked' : ''} style="width:auto"> ${s}</label>`).join('')}</fieldset>
+        <div><button class="primary" type="submit">Create key</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="key-out"></div></div>`))}
+      <div class="panel"><h2>Keys</h2>${raw(keys.length ? `<table><tbody>${keys.map((k) => `<tr><td><code>${esc(k.prefix)}…</code> ${esc(k.name)}<div class="small muted">${esc((k.scopes || []).join(', '))}</div></td><td class="small">${k.revoked_at ? 'revoked' : 'last used ' + esc(ago(k.last_used_at))}</td><td class="r">${isOwner() && !k.revoked_at ? `<button class="small danger" data-revoke="${esc(k.id)}">Revoke</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No keys yet.</p>')}</div>
+      <div class="panel"><h2>Webhooks</h2>
+        ${raw(webhooks.length ? `<table><tbody>${webhooks.map((w) => `<tr><td><code>${esc(w.url)}</code><div class="small muted">${esc(w.events.join(', '))}</div></td><td class="r">${isOwner() ? `<button class="small danger" data-del-hook="${esc(w.id)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No webhooks yet.</p>')}
+        ${raw(ownerOnly(`<form class="f" id="hook-form" style="margin-top:1rem"><label style="grid-column:span 2">HTTPS URL<input name="url" required placeholder="https://"></label>
+          <fieldset style="grid-column:1/-1;border:0;padding:0;margin:0" class="row small">${['alert.*', 'device.*', 'event.created', 'reading.created'].map((e, i) => `<label class="row" style="gap:.3rem"><input type="checkbox" name="ev_${i}" value="${e}" ${i === 0 ? 'checked' : ''} style="width:auto"> ${e}</label>`).join('')}</fieldset>
+          <div><button type="submit">Add webhook</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="hook-out"></div>`))}
+      </div>`);
+    bindForm('#key-form', async (d, form) => {
+      const out = await api('POST', '/keys', { name: d.name, scopes: Object.entries(d).filter(([k]) => k.startsWith('scope_')).map(([, v]) => v) });
+      form.reset();
+      app.querySelector('#key-out').innerHTML = h`<div class="secret">Copy this key now. It won't be shown again.<br><code>${out.key}</code></div>`;
+    });
+    bindForm('#hook-form', async (d, form) => {
+      const out = await api('POST', '/webhooks', { url: d.url, events: Object.entries(d).filter(([k]) => k.startsWith('ev_')).map(([, v]) => v) });
+      form.reset();
+      app.querySelector('#hook-out').innerHTML = h`<div class="secret">Signing secret (shown once): <code>${out.webhook.secret}</code></div>`;
+    });
+    onClick('[data-revoke]', async (d) => { await api('POST', `/keys/${d.revoke}/revoke`); route(); });
+    onClick('[data-del-hook]', async (d) => { await api('DELETE', `/webhooks/${d.delHook}`); route(); });
+  };
+
+  views.carbon = async () => {
+    const { projects } = await api('GET', '/carbon');
+    const t = (x) => `${Number(x).toLocaleString(undefined, { maximumFractionDigits: 3 })} tCO₂e`;
+    layout('carbon', h`<h1>Carbon</h1>
+      ${raw(projects.length ? `<div class="panel"><table><thead><tr><th>Project</th><th class="r">Calculated</th><th class="r">Net</th></tr></thead><tbody>${projects.map((p) => `<tr class="click" data-href="#project-${esc(p.id)}"><td>${esc(p.name)}<div class="small muted">${p.methodology === 'biochar-v1' ? 'Biochar' : 'Cookstoves'}${p.owned ? '' : ' · shared with you'}</div></td><td class="r num">${p.summary.calculated}/${p.summary.activities}</td><td class="r num">${esc(t(p.summary.netTco2e))}</td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="panel"><p class="empty">No carbon projects. To start one, email <a href="mailto:titan@kitovu.com.ng">titan@kitovu.com.ng</a>.</p></div>')}`);
+    bindRowLinks();
+  };
+  views.project = async (id) => {
+    const { project: p, summary, activities } = await api('GET', `/carbon/${id}`);
+    const t = (x) => `${Number(x).toLocaleString(undefined, { maximumFractionDigits: 3 })} tCO₂e`;
+    layout('carbon', h`<p class="small"><a href="#carbon">Carbon</a></p><h1>${p.name}</h1>
+      <div class="tiles"><div class="tile"><div class="v">${t(summary.netTco2e)}</div><div class="l">Net, calculated</div></div><div class="tile"><div class="v">${summary.calculated}/${summary.activities}</div><div class="l">Calculated</div></div></div>
+      <div class="panel">${raw(activities.length ? `<table><thead><tr><th>Reference</th><th>When</th><th>Result</th></tr></thead><tbody>${activities.map((a) => `<tr><td>${esc(a.reference ?? a.id.slice(0, 8))}</td><td class="small">${esc(when(a.started_at))}${a.ended_at ? ' → ' + esc(when(a.ended_at)) : ''}</td><td>${a.result?.status === 'ok' ? esc(t(a.result.netTco2e)) : `<span class="muted">${esc(a.result?.status === 'incomplete' ? 'needs data' : a.status)}</span>`}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Nothing recorded yet.</p>')}</div>`);
+  };
+
+  views.billing = async () => {
+    const { plan, invoices, usage } = await api('GET', '/billing');
+    layout('billing', h`<h1>Billing</h1>
+      <div class="tiles">
+        <div class="tile"><div class="v">${plan ? plan.name : '–'}</div><div class="l">Plan</div></div>
+        <div class="tile"><div class="v">${usage.active_devices}</div><div class="l">Active devices this month</div></div>
+        <div class="tile"><div class="v">${Number(usage.api_calls).toLocaleString()}</div><div class="l">API calls this month</div></div>
+      </div>
+      <div class="panel"><h2>Invoices</h2>${raw(invoices.length ? `<table><tbody>${invoices.map((i) => `<tr><td>${esc(i.period)}</td><td class="r num">${esc(i.currency)} ${Number(i.amount).toLocaleString()}</td><td>${i.status === 'paid' ? '<span class="pill st-online">paid</span>' : '<span class="pill pending">due</span>'}</td><td class="r">${i.status === 'open' && isOwner() ? `<button class="small primary" data-pay="${esc(i.id)}">Pay now</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No invoices yet.</p>')}</div>`);
+    onClick('[data-pay]', async (d) => { const { url } = await api('POST', `/invoices/${d.pay}/pay`); location.href = url; });
+  };
+
+  views.settings = async () => {
+    const { users, orgId, devicePrefix } = await api('GET', '/team');
+    layout('settings', h`<h1>Settings</h1>
+      <div class="grid2">
+        <div class="panel"><h2>Organisation</h2><dl class="kv"><dt>Name</dt><dd>${me.orgName}</dd><dt>Organisation ID</dt><dd><code>${orgId}</code></dd><dt>Device prefix</dt><dd>${devicePrefix ?? 'not assigned'}</dd></dl>
+          <h2 style="margin-top:1.2rem">Change your password</h2>
+          <form class="f" id="pw-form"><label>Current password<input name="current" type="password" autocomplete="current-password" required></label><label>New password<input name="next" type="password" minlength="10" autocomplete="new-password" required></label><div><button type="submit">Change password</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>
+        <div class="panel"><h2>Team</h2><table><tbody>${raw(users.map((u) => `<tr><td>${esc(u.email)}<div class="small muted">${esc(u.name ?? '')}</div></td><td>${u.role === 'client_owner' ? 'Owner' : 'Member'}</td><td class="small">${esc(ago(u.last_login_at))}</td></tr>`).join(''))}</tbody></table>
+          ${raw(ownerOnly(`<form class="f" id="team-form" style="margin-top:1rem"><label>Email<input name="email" type="email" required></label><label>Name<input name="name"></label><label>Role<select name="role"><option value="client_member">Member (view, acknowledge alerts)</option><option value="client_owner">Owner (everything)</option></select></label><div><button type="submit">Add person</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form><div id="team-out"></div>`))}</div>
+      </div>`);
+    bindForm('#pw-form', async (d) => { await api('POST', '/password', d); me = null; renderLogin(); toast('Password changed. Sign in again.'); });
+    bindForm('#team-form', async (d, form) => { const out = await api('POST', '/team', d); form.reset(); app.querySelector('#team-out').innerHTML = h`<div class="secret">${out.email} can sign in at /console with temporary password <code>${out.temporaryPassword}</code>.</div>`; });
+  };
+
+  async function route() {
+    if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
+    const [path, qs] = (location.hash.slice(1) || 'overview').split('?');
+    const params = new URLSearchParams(qs || '');
+    const m = /^(site|device|project)-(.+)$/.exec(path);
+    try { if (m) await views[m[1]](decodeURIComponent(m[2]), params); else await (views[path] || views.overview)(null, params); }
+    catch (e) { if (me) toast(e.message); }
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>

@@ -33,9 +33,11 @@ export function parseCookies(header: string | undefined): Record<string, string>
 export const SESSION_COOKIE = 'titan_session';
 export const SESSION_DAYS = 7;
 
-export function sessionCookie(token: string, secure: boolean): string {
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`;
+export const CONSOLE_COOKIE = 'titan_console';
+
+export function sessionCookie(token: string, secure: boolean, name = SESSION_COOKIE): string {
+  return `${name}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`;
 }
-export function clearCookie(secure: boolean): string {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+export function clearCookie(secure: boolean, name = SESSION_COOKIE): string {
+  return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 }

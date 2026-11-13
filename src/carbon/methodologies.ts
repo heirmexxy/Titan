@@ -40,10 +40,14 @@ export function heldTemperature(points: Point[], minMinutes = 10, maxGapMin = 5)
   return best;
 }
 
-/** Permanence factor (fraction of carbon remaining after 100 years) by production temperature, IPCC 2019 Refinement Tier 1 values. */
+/**
+ * Permanence factor (fraction of biochar carbon remaining after 100 years) by production temperature:
+ * IPCC 2019 Refinement, Vol. 4 Ch. 2 Appendix 4, Table 4Ap.2 (>600 °C 0.89, 450–600 °C 0.80, 350–450 °C 0.65).
+ * IPCC derived these for biochar applied to mineral soils under cropland and grassland.
+ */
 export function permanenceFactor(tempC: number | null): number | null {
   if (tempC === null) return null;
-  if (tempC >= 600) return 0.89;
+  if (tempC > 600) return 0.89;
   if (tempC >= 450) return 0.8;
   if (tempC >= 350) return 0.65;
   return null;

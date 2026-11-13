@@ -9,6 +9,7 @@ import { createApp } from '../src/http/app.js';
 import { DeviceService } from '../src/ingest/devices.js';
 import { IngestPipeline } from '../src/ingest/pipeline.js';
 import { Dispatcher } from '../src/notify/dispatcher.js';
+import { registerMcp } from '../src/mcp/server.js';
 import { body, deviceKeys, ORG, seededStore, SITE } from './helpers.js';
 
 const LENDER = '00000000-0000-0000-0000-0000000000b1';
@@ -28,6 +29,7 @@ const app = createApp({
 
 let server: Server;
 let base = '';
+registerMcp(app, { store, selfBaseUrl: () => base });
 const OWNER_KEY = 'tk_live_owner_aaaaaaaaaaaaaaaaaaaaaaaa';
 const LENDER_KEY = 'tk_live_lender_bbbbbbbbbbbbbbbbbbbbbbbb';
 const call = async (method: string, path: string, opts: { key?: string; json?: unknown; headers?: Record<string, string>; raw?: string } = {}) => {
@@ -197,4 +199,31 @@ test('invoice pricing', () => {
   assert.equal(inv.amount, 10000 + 12 * 2500 + 3 * 50);
   assert.equal(inv.lines.length, 3);
   assert.equal(priceInvoice(plan, { activeDevices: 0, apiCalls: 0 }).amount, 10000);
+});
+
+test('MCP: agents get the same data and permissions as their key', async () => {
+  const rpc = async (key: string | null, body: unknown) => {
+    const res = await fetch(`${base}/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(body) });
+    const t = await res.text();
+    return { status: res.status, json: t ? JSON.parse(t) : null };
+  };
+  assert.equal((await rpc(null, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })).status, 401);
+  const init = await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } } });
+  assert.equal(init.json.result.protocolVersion, '2025-06-18');
+  assert.ok(init.json.result.capabilities.tools);
+  assert.equal((await rpc(OWNER_KEY, { jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
+  const tools = (await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 2, method: 'tools/list' })).json.result.tools.map((t: any) => t.name);
+  assert.ok(tools.includes('latest_readings'));
+  assert.ok(!tools.includes('send_command'), 'owner test key has no control:devices scope');
+  const sites = await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'list_sites', arguments: {} } });
+  assert.equal(sites.json.result.isError, false);
+  assert.equal(JSON.parse(sites.json.result.content[0].text).sites[0].id, SITE);
+  const latest = await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'latest_readings', arguments: { siteId: SITE } } });
+  assert.ok(JSON.parse(latest.json.result.content[0].text).readings.length > 0);
+  const missing = await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'get_site', arguments: {} } });
+  assert.equal(missing.json.result.isError, true);
+  assert.equal((await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'send_command', arguments: { deviceId: 'x', command: 'y' } } })).json.error.code, -32602);
+  assert.equal((await rpc(OWNER_KEY, { jsonrpc: '2.0', id: 7, method: 'bogus' })).json.error.code, -32601);
+  const batch = await rpc(OWNER_KEY, [{ jsonrpc: '2.0', id: 8, method: 'ping' }, { jsonrpc: '2.0', method: 'notifications/initialized' }]);
+  assert.equal(batch.json.length, 1);
 });

@@ -63,6 +63,7 @@
     <div class="g">Control and carbon</div>
     <a href="#control">Device commands</a>
     <a href="#carbon">Carbon projects</a>
+    <a href="#agents">AI agents (MCP)</a>
     <div class="g">Reference</div>
     <a href="#errors">Errors and limits</a>
     <a href="/docs/device-protocol-v1.md">Device protocol</a>
@@ -246,6 +247,13 @@ function verifyTitan(rawBody, header, secret) {
     <p>Kinds: <code>biochar.mass_kg</code>, <code>biochar.moisture_pct</code>, <code>feedstock.mass_kg</code>, <code>lab.organic_carbon_pct</code>, <code>lab.h_corg</code>. Measurements are never edited; send a new one with <code>supersedesId</code> to correct a value.</p>
     <div class="ep"><span class="m post">POST</span><code>/v1/carbon/activities/{id}/calculate</code><span class="scope">write:carbon</span></div>
     <p>Result <code>status</code> is <code>ok</code>, <code>incomplete</code> (lists what's missing) or <code>ineligible</code> (for biochar: H/Corg above the limit, or held temperature below 350 °C).</p>
+
+    <h2 id="agents">AI agents (MCP)</h2>
+    <p>Titan is also a <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server, so AI agents and assistants can read your data and, if you allow it, operate your devices.</p>
+<pre><code>URL:    https://titan.kitovu.com.ng/mcp
+Header: Authorization: Bearer tk_live_…</code></pre>
+    <p>The agent gets exactly the access of the key you give it: the same sites, grants, scopes, rate limits and audit trail. Tools: <code>list_sites</code>, <code>get_site</code>, <code>latest_readings</code>, <code>query_readings</code>, <code>condition_report</code>, <code>list_alerts</code>, <code>list_devices</code>, <code>list_metrics</code>, <code>carbon_projects</code>, <code>carbon_project</code>, <code>carbon_activity</code>, and, only for keys with <code>control:devices</code>, <code>device_commands</code> and <code>send_command</code>.</p>
+    <p class="note">Give agents read-only keys unless they truly need to switch equipment. <code>send_command</code> is marked as an action that changes the physical world, so well-behaved clients ask the user before calling it.</p>
 
     <h2 id="errors">Errors and limits</h2>
     <p>Errors return <code>{ "error": "code", "message": "…" }</code> with the matching HTTP status: 400 bad request, 401 missing or invalid key, 403 missing scope, 404 not found or not visible to you, 429 rate limited.</p>

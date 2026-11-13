@@ -36,8 +36,9 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 | Carbon module: projects, biochar batches (opened/closed by kiln nodes), cookstove periods, lab results with certificate fingerprints, `biochar-v1` and `cookstove-v1` calculations with full lineage | Done |
 | Data retention per organisation (30 days to 20 years) | Done |
 | Sensor node reference designs (`docs/sensor-nodes.md`) | Done |
-| Client console for outside organisations | Next |
-| MCP server for AI agents | Next |
+| Client console (`/console`): sites, devices with charts and controls, alerts, rules, sharing, API keys and webhooks, carbon (read), billing with Paystack, team | Done |
+| MCP server for AI agents (`/mcp`), same permissions as the API key | Done |
+| LoRa gateway relay (Protocol v1.1) | Next |
 
 ## Develop
 

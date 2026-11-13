@@ -494,6 +494,19 @@ export function registerAdmin(r: Router, d: AdminDeps) {
     await audit(s, 'user.created', row.id, { email, role });
     return { status: 201, body: { id: row.id, email, role, temporaryPassword: password } };
   });
+  r.post('/admin/api/orgs/:id/users', async (req) => {
+    const s = await session(req, 'admin');
+    const org = (await q(`SELECT id, kind FROM organisations WHERE id = $1`, [req.params.id])).rows[0];
+    if (!org || org.kind === 'kitovu') throw new HttpError(400, 'invalid_org', 'Choose a client or data-user organisation');
+    const email = str(req.body?.email, 'email').toLowerCase();
+    if ((await q(`SELECT 1 FROM users WHERE lower(email) = $1`, [email])).rows.length) throw new HttpError(409, 'exists', 'That email already has a Titan account');
+    const role = req.body?.role === 'client_member' ? 'client_member' : 'client_owner';
+    const password = randomToken(12);
+    const row = (await q(`INSERT INTO users (org_id, email, name, role, password_hash) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [org.id, email, optStr(req.body?.name), role, await hashPassword(password)])).rows[0];
+    await audit(s, 'client_user.created', row.id, { org: org.id, email, role });
+    return { status: 201, body: { email, role, temporaryPassword: password, signIn: '/console' } };
+  });
   r.post('/admin/api/password', async (req) => {
     const s = await session(req);
     const u = (await q(`SELECT password_hash FROM users WHERE id = $1`, [s.userId])).rows[0];

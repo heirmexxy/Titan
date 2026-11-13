@@ -5,6 +5,8 @@ import { config } from './config.js';
 import { registerAdmin } from './admin/routes.js';
 import { ActuatorService } from './actuators/service.js';
 import { CarbonService } from './carbon/service.js';
+import { registerMcp } from './mcp/server.js';
+import { registerConsole } from './console/routes.js';
 import { Billing } from './billing/billing.js';
 import { createApp } from './http/app.js';
 import { DeviceService, EmqxBroker } from './ingest/devices.js';
@@ -39,6 +41,8 @@ const app = createApp({
 });
 
 registerAdmin(app, { pool: store.pool, devices, actuators, carbon, secureCookies: config.publicUrl.startsWith('https') });
+registerConsole(app, { pool: store.pool, store, devices, actuators, carbon, billing, publicUrl: config.publicUrl, secureCookies: config.publicUrl.startsWith('https') });
+registerMcp(app, { store, selfBaseUrl: () => `http://127.0.0.1:${config.port}` });
 
 const server = createServer(app.handler());
 server.keepAliveTimeout = 65_000; // longer than Nginx's upstream keepalive

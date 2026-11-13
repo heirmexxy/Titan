@@ -122,6 +122,12 @@ Retention is set per organisation (default 2 years, up to 20) so carbon projects
 ### 5.14 Client console
 `/console` for client owners and members: sites, zones and stacks; device registration under the organisation's prefix with provisioning codes; device charts and controls (commands allowed for API use); alerts; alert rules and contacts; sharing (grants by Organisation ID); API keys and webhooks; carbon (read); invoices with Paystack payment; team. Members can view and acknowledge alerts only. Kitovu creates the first owner login from the admin dashboard.
 
+### 5.15 Ops agent
+- **Incidents** (every 2 minutes): open alerts are grouped by likely cause: nodes behind one LoRa gateway → gateway down; several devices at a site offline within 15 minutes → power outage (if a device reported mains lost) or connectivity; the same metric breaching at several places on a site → site-wide condition. Kitovu ops are emailed once per new incident; incidents resolve when all their alerts do. Clients see open incidents on their console overview.
+- **Sensor health** (hourly): stuck sensors (no change in 24 h), implausible jumps, drift against peer sensors at the same site (week on week), signature failures, enclosure opened, message counter resets, unset clocks. Findings can be dismissed for 7 days.
+- **Messages and reports**: drafts for incident messages and monthly reports (prepared on the 1st). Written from templates, or by Claude when `ANTHROPIC_API_KEY` is set, using only the facts Titan supplies. Nothing is sent without a person approving it. Sent reports appear in the client console.
+- **Carbon readiness**: per-batch/period checklist of what a verifier needs (closed, calculated, lab results with certificate fingerprints, continuous kiln record, clock set, device-signed readings, parameters) and a downloadable verifier pack per project.
+
 ## 6. Non-functional
 
 - Hosting: second Hostinger KVM 2 (the one not running Abia ADDS), native installs (no Docker): PostgreSQL 16 + TimescaleDB, EMQX, Node 22 under systemd, Nginx + Let's Encrypt.

@@ -41,6 +41,7 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 | MCP server for AI agents (`/mcp`), same permissions as the API key | Done |
 | LoRa gateway relay and compact readings (Protocol v1.1) | Done |
 | Kitovu support sessions in client consoles (1 hour, reason required, visible to the client) | Done |
+| Ops agent: alerts grouped into incidents by cause (power, connectivity, gateway, site-wide condition), sensor health (stuck, spikes, drift vs peers, signature failures, enclosure, counter resets, unset clocks), drafted customer messages, monthly reports, carbon readiness checklists and verifier packs | Done |
 | Demo videos by use case on the landing page (`web/videos/`: warehouses, fish farms, PAYG solar, cookstoves, biochar) | Done |
 | Device simulator (`tools/simulate-device.ts`) and WareGuard reference firmware (`firmware/wareguard/`, untested on hardware) | Done |
 

@@ -39,7 +39,7 @@ const str = (v: unknown, name: string, max = 200): string => {
 };
 const optStr = (v: unknown, max = 200) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
-export function registerConsole(r: Router, d: ConsoleDeps) {
+export function registerConsole(r: Router, d: ConsoleDeps): { who: (req: Req, owner?: boolean) => Promise<Who> } {
   const q = (t: string, v: unknown[] = []) => d.pool.query(t, v);
   const audit = (w: Who, action: string, target: string | null, detail?: unknown) =>
     q(`INSERT INTO audit_log (actor, org_id, action, target, detail) VALUES ($1,$2,$3,$4,$5)`,
@@ -460,4 +460,5 @@ export function registerConsole(r: Router, d: ConsoleDeps) {
     return { body: { ok: true }, headers: { 'Set-Cookie': clearCookie(d.secureCookies, CONSOLE_COOKIE) } };
   });
 
+  return { who };
 }

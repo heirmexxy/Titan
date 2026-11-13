@@ -1,1 +1,0 @@
-../../docs/device-protocol-v1.md

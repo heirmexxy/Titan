@@ -167,7 +167,7 @@
 
   // ---------- layout ----------
   const NAV = [
-    ['overview', 'Overview'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'], ['automations', 'Automations'], ['carbon', 'Carbon'],
+    ['overview', 'Overview'], ['agent', 'Ops agent'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'], ['automations', 'Automations'], ['carbon', 'Carbon'],
     ['orgs', 'Organisations & keys'], ['frequency', 'Reporting frequency'], ['billing', 'Plans & usage'], ['demos', 'Demo requests'], ['settings', 'Settings'],
   ];
   let openAlerts = 0;
@@ -236,6 +236,79 @@
     onClick('[data-resolve]', async (d) => { await api('POST', `/alerts/${d.resolve}/resolve`); toast('Alert resolved'); route(); });
   }
   function bindRowLinks() { app.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => (location.hash = tr.dataset.href))); }
+
+
+  const CAUSE = { power_outage: 'Power', site_connectivity: 'Connectivity', gateway_down: 'Gateway', site_condition: 'Site condition' };
+  views.agent = async (_, params) => {
+    const tab = params.get('tab') || 'incidents';
+    const sum = await api('GET', '/agent/summary');
+    const tabs = [['incidents', `Incidents (${sum.incidents})`], ['health', `Sensor health (${sum.findings})`], ['messages', `Messages to send (${sum.drafts})`], ['reports', `Monthly reports (${sum.draft_reports} to review)`]];
+    let body = '';
+    if (tab === 'incidents') {
+      const { incidents } = await api('GET', `/agent/incidents?status=${params.get('status') || 'open'}`);
+      body = `<div class="row" style="justify-content:space-between;margin-bottom:.75rem"><p class="muted" style="margin:0">Alerts grouped by their likely cause. Kitovu ops are emailed when a new incident opens.</p><button data-run="incidents">Check now</button></div>
+        ${incidents.length ? incidents.map((i) => `<div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(i.title)}</h2><span class="pill ${i.status === 'open' ? (i.severity === 'critical' ? 'sev-critical' : 'sev-warning') : 'st-resolved'}">${esc(CAUSE[i.cause] ?? i.cause)} · ${esc(i.status)}</span></div>
+          <p>${esc(i.summary)}</p><p class="small muted">${esc(i.org_name)} · ${i.alert_ids.length} alerts · devices ${esc((i.device_ids || []).join(', '))} · opened ${esc(ago(i.opened_at))}${i.resolved_at ? ' · resolved ' + esc(ago(i.resolved_at)) : ''}</p>
+          <button data-draft="${esc(i.id)}">Draft a message to the customer</button></div>`).join('') : '<div class="panel"><p class="empty">No open incidents.</p></div>'}
+        <p><a href="#agent?tab=incidents&status=resolved">Show resolved incidents</a></p>`;
+    } else if (tab === 'health') {
+      const { findings } = await api('GET', '/agent/findings');
+      body = `<div class="row" style="justify-content:space-between;margin-bottom:.75rem"><p class="muted" style="margin:0">Checked every hour: sensors stuck on one value, implausible jumps, drift away from nearby sensors, and signs of tampering.</p><button data-run="health">Check now</button></div>
+        <div class="panel">${findings.length ? `<div class="scroll"><table><thead><tr><th>Finding</th><th>Where</th><th>Seen</th><th></th></tr></thead><tbody>${findings.map((f) => `
+          <tr><td><span class="pill sev-${esc(f.severity)}">${esc(f.kind.replace('_', ' '))}</span> ${esc(f.title)}<div class="small muted">${esc(f.detail?.hint ?? '')}</div></td>
+          <td>${esc(f.org_name)}<div class="small"><a href="#device-${esc(f.device_id)}">${esc(f.device_id)}</a> ${esc(f.site_name ?? '')}</div></td>
+          <td class="small">since ${esc(ago(f.first_seen))}</td><td class="r"><button class="small" data-dismiss="${esc(f.id)}">Dismiss</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">All sensors look healthy.</p>'}</div>`;
+    } else if (tab === 'messages') {
+      const { drafts } = await api('GET', '/agent/drafts');
+      body = drafts.length ? drafts.map((m) => `<div class="panel"><form class="f msg-form" data-id="${esc(m.id)}" style="grid-template-columns:1fr">
+          <p class="small muted" style="margin:0">To ${esc(m.org_name)}${m.incident_title ? ' about: ' + esc(m.incident_title) : ''} · written by ${m.written_by === 'claude' ? 'Claude' : 'template'}</p>
+          <label>To (blank = their alert contacts)<input name="to" placeholder="Loading…" data-recipients="${esc(m.id)}"></label>
+          <label>Subject<input name="subject" value="${esc(m.subject)}"></label>
+          <label>Message<textarea name="body" rows="12">${esc(m.body)}</textarea></label>
+          <div class="row"><button class="primary" type="submit">Send</button><button type="button" data-discard="${esc(m.id)}">Discard</button></div><p class="form-msg small"></p></form></div>`).join('')
+        : '<div class="panel"><p class="empty">No drafts. Open an incident and choose "Draft a message to the customer".</p></div>';
+    } else {
+      const [{ reports }, { orgs }] = await Promise.all([api('GET', '/agent/reports'), api('GET', '/orgs')]);
+      const lastMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+      body = `<div class="panel"><h2>Prepare reports</h2><p class="small muted">Drafts are prepared automatically on the 1st of each month. Review, then send.</p>
+        <form class="f" id="rep-form"><label>Organisation<select name="orgId"><option value="all">All organisations</option>${orgs.filter((o) => o.kind !== 'consumer').map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
+        <label>Month<input type="month" name="period" value="${lastMonth}"></label><div><button class="primary" type="submit">Prepare</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>
+        <div class="panel">${reports.length ? `<div class="scroll"><table><thead><tr><th>Report</th><th>Summary</th><th>Status</th><th></th></tr></thead><tbody>${reports.map((r) => `
+          <tr><td>${esc(r.org_name)}<div class="small muted">${esc(r.period)}</div></td><td class="small">${esc((r.narrative || '').slice(0, 160))}${(r.narrative || '').length > 160 ? '…' : ''}</td>
+          <td>${r.status === 'sent' ? `<span class="pill st-online">sent</span><div class="small muted">${esc((r.sent_to || []).join(', '))}</div>` : '<span class="pill pending">draft</span>'}</td>
+          <td class="r"><div class="row" style="justify-content:flex-end"><a class="btn" style="text-decoration:none;padding:.2rem .55rem;font-size:.85rem" href="/admin/api/agent/reports/${esc(r.id)}/html" target="_blank" rel="noopener">View</a>${r.status !== 'sent' ? `<button class="small primary" data-send-report="${esc(r.id)}">Send</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No reports yet.</p>'}</div>`;
+    }
+    layout('agent', h`<h1>Ops agent</h1>
+      <div class="tiles">
+        <div class="tile ${Number(sum.incidents) ? 'bad' : ''}"><div class="v">${sum.incidents}</div><div class="l">Open incidents</div></div>
+        <div class="tile ${Number(sum.critical_findings) ? 'bad' : ''}"><div class="v">${sum.findings}</div><div class="l">Sensor findings (${sum.critical_findings} critical)</div></div>
+        <div class="tile"><div class="v">${sum.drafts}</div><div class="l">Messages to review</div></div>
+        <div class="tile"><div class="v">${sum.draft_reports}</div><div class="l">Reports to review</div></div>
+      </div>
+      <div class="row" style="margin-bottom:1rem">${raw(tabs.map(([k, l]) => `<a class="btn" style="text-decoration:none;${k === tab ? 'background:var(--ink);color:var(--paper)' : ''}" href="#agent?tab=${k}">${esc(l)}</a>`).join(''))}</div>
+      ${raw(body)}`);
+    onClick('[data-run]', async (d) => { const out = await api('POST', '/agent/run', { what: d.run }); toast(d.run === 'incidents' ? `${out.opened} new, ${out.resolved} resolved` : `${out.open} open findings`); route(); });
+    onClick('[data-draft]', async (d) => { await api('POST', `/agent/incidents/${d.draft}/draft`); location.hash = '#agent?tab=messages'; });
+    onClick('[data-dismiss]', async (d) => { await api('POST', `/agent/findings/${d.dismiss}/dismiss`); route(); });
+    onClick('[data-discard]', async (d) => { await api('POST', `/agent/drafts/${d.discard}/discard`); route(); });
+    app.querySelectorAll('[data-recipients]').forEach(async (inp) => { try { const { to } = await api('GET', `/agent/drafts/${inp.dataset.recipients}/recipients`); inp.placeholder = to.join(', ') || 'No contacts: add one'; } catch {} });
+    app.querySelectorAll('.msg-form').forEach((f) => f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = formData(f); const msg = f.querySelector('.form-msg');
+      if (!confirmSend(f)) return;
+      try { const out = await api('POST', `/agent/drafts/${f.dataset.id}/send`, { subject: d.subject, body: d.body, to: d.to || undefined }); toast(`Sent to ${out.to.join(', ')}`); route(); }
+      catch (err) { msg.className = 'form-msg small err'; msg.textContent = err.message; }
+    }));
+    onClick('[data-send-report]', async (d) => { const out = await api('POST', `/agent/reports/${d.sendReport}/send`, {}); toast(`Report sent to ${out.to.join(', ')}`); route(); });
+    bindForm('#rep-form', async (d) => { await api('POST', '/agent/reports', d); toast('Prepared'); route(); });
+  };
+  // Two-step send: the first click arms the button, the second sends. Avoids accidental emails without a dialog.
+  function confirmSend(form) {
+    const b = form.querySelector('button[type=submit]');
+    if (b.dataset.armed) return true;
+    b.dataset.armed = '1'; b.textContent = 'Click again to send'; setTimeout(() => { delete b.dataset.armed; b.textContent = 'Send'; }, 4000);
+    return false;
+  }
 
   views.alerts = async (_, params) => {
     const status = params.get('status') || '';
@@ -728,6 +801,7 @@
           <p class="small muted">Example: <code>${hint}</code></p>
           ${raw(admin ? '<div><button type="submit">Save parameters</button></div>' : '')}<p class="form-msg small"></p></form></div>
       </div>
+      <p><a class="btn" style="text-decoration:none" href="/admin/api/agent/verifier-pack/${p.id}" download>Download verifier pack (JSON)</a></p>
       <div class="panel"><h2>${biochar ? 'Batches' : 'Periods'}</h2>${raw(activities.length ? `<div class="scroll"><table><thead><tr><th>Reference</th><th>When</th><th>Status</th><th class="r">Net</th></tr></thead><tbody>${activities.map((a) => `
         <tr class="click" data-href="#activity-${esc(a.id)}"><td>${esc(a.reference ?? a.id.slice(0, 8))}<div class="small muted">${esc(a.device_id ?? 'all devices')}</div></td><td class="small">${esc(when(a.started_at))}${a.ended_at ? ' → ' + esc(when(a.ended_at)) : ''}</td><td>${resultPill(a)}</td><td class="r num">${a.result?.status === 'ok' ? esc(tco2(a.result.netTco2e)) : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">Nothing recorded yet.</p>')}</div>`);
     bindRowLinks();
@@ -763,6 +837,7 @@
           ${p.methodology === 'cookstove-v1' ? [row('Stoves', `${esc(r.activeDevices)} used of ${esc(r.devices)}`), row('Cooking sessions', esc(r.sessions)), row('Cooking hours', esc(r.cookingHours))].join('') : ''}
           ${row('Calculated', esc(when(r.calculatedAt)))}</dl>
           <details style="margin-top:.75rem"><summary>Inputs and their sources</summary><pre style="white-space:pre-wrap;font-size:.8rem">${esc(JSON.stringify(r.inputs, null, 2))}</pre></details>`)}</div>
+        <div class="panel"><h2>Ready for verification?</h2><div id="readiness"><p class="empty">Checking…</p></div></div>
         <div class="panel"><h2>Measurements and lab results</h2>
           ${raw(measurements.length ? `<table><tbody>${measurements.map((m) => `<tr><td>${esc(kinds[m.kind]?.label ?? m.kind)}${m.supersedes_id ? ' <span class="small muted">(correction)</span>' : ''}<div class="small muted">${esc(m.document_ref ?? '')}${m.document_sha256 ? ' · sha256 ' + esc(String(m.document_sha256).slice(0, 12)) + '…' : ''}</div></td><td class="r num">${esc(m.value)} ${esc(m.unit)}</td><td class="small">${esc(when(m.created_at))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">None yet.</p>')}
           ${raw(a.status !== 'rejected' && kindOptions ? `<form class="f" id="meas-form" style="margin-top:1rem">
@@ -772,6 +847,10 @@
             <div><button type="submit">Add</button></div><p class="form-msg small" style="grid-column:1/-1">The certificate's fingerprint (SHA-256) is recorded, so anyone can later confirm the file wasn't changed. Keep the file itself with your project records.</p></form>` : '')}
         </div>
       </div>`);
+    api('GET', `/agent/readiness/${id}`).then(({ status, items }) => {
+      const label = { ready: ['st-online', 'Ready'], needs_attention: ['pending', 'Needs attention'], blocked: ['st-offline', 'Not ready'] }[status];
+      app.querySelector('#readiness').innerHTML = `<p><span class="pill ${label[0]}">${label[1]}</span></p><table><tbody>${items.map((i) => `<tr><td>${i.ok ? '✓' : i.level === 'blocker' ? '✕' : '!'}</td><td>${esc(i.label)}${!i.ok && i.detail ? `<div class="small muted">${esc(i.detail)}</div>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    }).catch((e) => { app.querySelector('#readiness').textContent = e.message; });
     onClick('#close-act', async () => { await api('POST', `/carbon/activities/${id}/close`, {}); route(); });
     onClick('#calc-act', async () => { await api('POST', `/carbon/activities/${id}/calculate`); toast('Calculated'); route(); });
     onClick('#reject-act', async () => { await api('POST', `/carbon/activities/${id}/reject`); route(); });

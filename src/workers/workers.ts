@@ -2,6 +2,7 @@ import type { Billing } from '../billing/billing.js';
 import type { IngestPipeline } from '../ingest/pipeline.js';
 import type { Dispatcher } from '../notify/dispatcher.js';
 import type { Store } from '../store/types.js';
+import type { OpsAgent } from '../agent/ops-agent.js';
 
 /** Background loops: offline detection, webhook delivery, monthly invoices. Returns a stop function. */
 interface Pool { query(text: string, values?: unknown[]): Promise<{ rows: any[]; rowCount: number | null }> }
@@ -19,7 +20,7 @@ export async function applyRetention(pool: Pool): Promise<number> {
   return deleted;
 }
 
-export function startWorkers(o: { store: Store; pipeline: IngestPipeline; dispatcher: Dispatcher; billing: Billing | null; sweepSeconds: number; pool?: Pool }) {
+export function startWorkers(o: { store: Store; pipeline: IngestPipeline; dispatcher: Dispatcher; billing: Billing | null; sweepSeconds: number; pool?: Pool; agent?: OpsAgent }) {
   const log = (msg: string, err: unknown) => console.error(JSON.stringify({ level: 'error', msg, err: String(err) }));
   let busy = { sweep: false, hooks: false };
 
@@ -52,5 +53,23 @@ export function startWorkers(o: { store: Store; pipeline: IngestPipeline; dispat
     try { await applyRetention(o.pool); } catch (e) { log('retention failed', e); }
   }, 3_600_000);
 
-  return () => { clearInterval(sweep); clearInterval(hooks); clearInterval(invoices); clearInterval(retention); };
+  // Operations agent: group alerts into incidents every 2 minutes; sensor health hourly;
+  // monthly report drafts on the 1st (Kitovu reviews and sends them).
+  const incidents = setInterval(async () => {
+    if (!o.agent) return;
+    try { await o.agent.runIncidents(); } catch (e) { log('incident grouping failed', e); }
+  }, 120_000);
+  const health = setInterval(async () => {
+    if (!o.agent) return;
+    try { await o.agent.runSensorHealth(); } catch (e) { log('sensor health failed', e); }
+    const now = new Date();
+    if (o.pool && now.getUTCDate() === 1 && now.getUTCHours() === 3) {
+      const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+      try {
+        for (const org of (await o.pool.query(`SELECT id FROM organisations WHERE kind <> 'consumer'`)).rows) await o.agent.buildReport(org.id, prev);
+      } catch (e) { log('monthly reports failed', e); }
+    }
+  }, 3_600_000);
+
+  return () => { clearInterval(sweep); clearInterval(hooks); clearInterval(invoices); clearInterval(retention); clearInterval(incidents); clearInterval(health); };
 }

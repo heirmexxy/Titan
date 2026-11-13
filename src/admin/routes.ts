@@ -43,7 +43,7 @@ function cleanIntervals(x: unknown): Record<string, number> {
   return out;
 }
 
-export function registerAdmin(r: Router, d: AdminDeps) {
+export function registerAdmin(r: Router, d: AdminDeps): { session: (req: Req, role?: 'admin') => Promise<Session> } {
   const q = (t: string, v: unknown[] = []) => d.pool.query(t, v);
 
   const audit = (s: Session, action: string, target: string | null, detail?: unknown) =>
@@ -688,4 +688,5 @@ export function registerAdmin(r: Router, d: AdminDeps) {
       return { body: { activity: a } };
     });
   }
+  return { session };
 }

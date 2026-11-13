@@ -213,7 +213,7 @@
 
 
   // ---------- layout ----------
-  const NAV = [['overview', 'Overview'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'], ['sharing', 'Sharing'], ['api', 'API & webhooks'], ['carbon', 'Carbon'], ['billing', 'Billing'], ['settings', 'Settings']];
+  const NAV = [['overview', 'Overview'], ['reports', 'Reports'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'], ['sharing', 'Sharing'], ['api', 'API & webhooks'], ['carbon', 'Carbon'], ['billing', 'Billing'], ['settings', 'Settings']];
   let openAlerts = 0;
   const isOwner = () => me && me.role === 'client_owner';
   function layout(active, content) {
@@ -264,7 +264,7 @@
   }
 
   views.overview = async () => {
-    const { counts: c, alerts, sites } = await api('GET', '/overview');
+    const [{ counts: c, alerts, sites }, { incidents }] = await Promise.all([api('GET', '/overview'), api('GET', '/incidents')]);
     openAlerts = c.open_alerts;
     layout('overview', h`<h1>${me.orgName}</h1>
       <div class="tiles">
@@ -275,11 +275,17 @@
         <div class="tile"><div class="v">${c.shared_with_us}</div><div class="l">Data shares received</div></div>
         <div class="tile"><div class="v">${Number(c.messages_month).toLocaleString()}</div><div class="l">Messages this month</div></div>
       </div>
+      ${raw(incidents.filter((i) => i.status === 'open').map((i) => `<div class="secret" role="status"><b>${esc(i.title)}</b><br>${esc(i.summary)}</div>`).join(''))}
       <div class="grid2">
         <div class="panel"><h2>Alerts</h2>${raw(alertTable(alerts))}</div>
         <div class="panel"><h2>Your sites</h2>${raw(sites.length ? `<table><thead><tr><th>Site</th><th class="r">Online</th></tr></thead><tbody>${sites.map((s) => `<tr class="click" data-href="#site-${esc(s.id)}"><td>${esc(s.name)}<div class="small muted">${esc(s.kind)}</div></td><td class="r num">${s.online}/${s.devices}</td></tr>`).join('')}</tbody></table>` : `<p class="empty">No sites yet.${isOwner() ? ' <a href="#sites">Add your first site</a>.' : ''}</p>`)}</div>
       </div>`);
     bindAlertButtons(); bindRowLinks();
+  };
+
+  views.reports = async () => {
+    const { reports } = await api('GET', '/reports');
+    layout('reports', h`<h1>Monthly reports</h1><div class="panel">${raw(reports.length ? `<table><tbody>${reports.map((r) => `<tr><td>${esc(r.period)}</td><td class="small muted">${esc(r.totals ? `${r.totals.sites} sites · ${Number(r.totals.readings).toLocaleString()} readings · ${r.totals.alerts} alerts` : '')}</td><td class="r"><a href="/console/api/reports/${esc(r.id)}/html" target="_blank" rel="noopener">Open report</a></td></tr>`).join('')}</tbody></table>` : '<p class="empty">Your first monthly report will appear here after the end of the month.</p>')}</div>`);
   };
 
   views.alerts = async () => {

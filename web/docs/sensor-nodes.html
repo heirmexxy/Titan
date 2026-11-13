@@ -1,0 +1,213 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Titan sensor nodes</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet"><style>body{margin:0;font-family:Archivo,Inter,system-ui,sans-serif;color:#14213D;background:#fff;line-height:1.6}
+main{max-width:860px;margin:0 auto;padding:2rem 1.25rem 4rem}a{color:inherit}
+nav{max-width:860px;margin:0 auto;padding:1rem 1.25rem;display:flex;gap:1.25rem;font-size:.95rem}nav b{font-weight:800;margin-right:auto}
+h1{font-size:2.2rem;line-height:1.1;letter-spacing:-.02em}h2{margin-top:2.5rem;padding-top:.75rem;border-top:3px solid #14213D}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}th,td{text-align:left;padding:.45rem .7rem .45rem 0;border-bottom:1px solid #D5DEDA;vertical-align:top}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.88em;background:#EEF2F0;padding:.05rem .3rem;border-radius:4px}
+pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overflow-x:auto;font-size:.85rem}pre code{background:none;color:inherit;padding:0}</style></head>
+<body><nav aria-label="Docs"><b>Titan</b><a href="../index.html">Home</a><a href="index.html">Integration Guide</a><a href="device-protocol.html">Device protocol</a><a href="sensor-nodes.html">Sensor nodes</a></nav><main><h1>Titan sensor nodes: reference designs</h1>
+<p><strong>For:</strong> hardware engineers · <strong>Status:</strong> Draft v1 · All nodes follow <a href="device-protocol.html">Device Protocol v1</a>.</p>
+<p>Customers without their own IoT get a Titan node. Every node shares one base, and each use case adds its own sensor board. The firmware is common: provisioning, Ed25519 signing, offline buffering, config and commands. Only the sensor drivers change.</p>
+<h2>1. Common base</h2>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Choice</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MCU</td>
+<td>ESP32-S3 (or ESP32-C3 for low-cost nodes)</td>
+<td>Wi-Fi, flash encryption, secure boot v2, enough RAM for TLS</td>
+</tr>
+<tr>
+<td>Cellular</td>
+<td>SIMCom A7670 / SIM7600 (LTE Cat-1, falls back to 2G)</td>
+<td>Native TLS 1.2; SIM800-class modems are not supported</td>
+</tr>
+<tr>
+<td>Clock</td>
+<td>DS3231 RTC with coin cell</td>
+<td>Correct timestamps through power cuts and while offline</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>Encrypted NVS for keys; LittleFS ring buffer for messages</td>
+<td>≥ 72 h of buffered data (weeks for cookstove nodes)</td>
+</tr>
+<tr>
+<td>Power</td>
+<td>Mains 5 V, or Li-ion + small solar panel for field nodes</td>
+<td></td>
+</tr>
+<tr>
+<td>Enclosure</td>
+<td>IP65, cable glands, tamper switch on the lid</td>
+<td>Tamper switch → <code>security.tamper</code></td>
+</tr>
+<tr>
+<td>Identity</td>
+<td>Device ID printed as text + QR on the case</td>
+<td>Installers scan it during provisioning</td>
+</tr>
+</tbody></table>
+<p><strong>Provisioning on site:</strong> hold the setup button to open a Wi-Fi hotspot with a setup page. The installer enters the Wi-Fi details or the SIM APN, plus the provisioning code from Titan. The node generates its key and calls <code>/api/provision</code> (Protocol §11).</p>
+<h2>2. Biochar kiln node (<code>titan-kiln-v1</code>)</h2>
+<p>Measures what a biochar carbon calculation needs from the production side. Lab results are entered in Titan separately.</p>
+<table>
+<thead>
+<tr>
+<th>Measurement</th>
+<th>Sensor</th>
+<th>Metric / channel</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Kiln temperature at 2–4 points</td>
+<td>Type-K thermocouples (ceramic-sheathed, rated ≥ 1,100 °C) via MAX31856</td>
+<td><code>kiln.temperature</code>, <code>k1/top</code>, <code>k1/middle</code>, <code>k1/bottom</code></td>
+</tr>
+<tr>
+<td>Biochar out</td>
+<td>Platform scale with RS232/RS485 output, or load cells + HX711</td>
+<td><code>biochar.mass</code>, one reading per weighed bag</td>
+</tr>
+<tr>
+<td>Feedstock in (optional)</td>
+<td>Same scale</td>
+<td><code>feedstock.mass</code></td>
+</tr>
+<tr>
+<td>Feedstock moisture (optional)</td>
+<td>Handheld meter reading entered by the operator, or a probe</td>
+<td><code>feedstock.moisture</code></td>
+</tr>
+<tr>
+<td>Batch start/end</td>
+<td>Two illuminated push buttons</td>
+<td><code>batch_start</code> / <code>batch_end</code> events, batch number on the node&#39;s display</td>
+</tr>
+<tr>
+<td>Location</td>
+<td>GPS module (optional; site location is usually enough)</td>
+<td><code>location.lat</code>, <code>location.lng</code></td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>Sampling:</strong> temperature every 30 s while a batch runs and every 5 min otherwise. Weighings are sent when the scale reading is stable.</li>
+<li><strong>How Titan uses it:</strong> a batch starts and ends with the button events. The &quot;held temperature&quot; is the highest temperature the coolest probe sustained for at least 10 minutes, which sets the permanence factor. Masses are summed per batch. Each number in the calculation links back to the signed messages it came from.</li>
+</ul>
+<h2>3. Cookstove node (<code>titan-cookstove-v1</code>)</h2>
+<p>A small, battery-powered stove use monitor.</p>
+<table>
+<thead>
+<tr>
+<th>Measurement</th>
+<th>Sensor</th>
+<th>Metric</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Stove body temperature</td>
+<td>NTC thermistor or Type-K thermocouple clipped to the stove body, away from the flame</td>
+<td><code>stove.temperature</code></td>
+</tr>
+<tr>
+<td>Electric cooker energy (e-cooking)</td>
+<td>Pulse-output energy meter or PZEM-004T</td>
+<td><code>stove.energy</code></td>
+</tr>
+<tr>
+<td>LPG use (LPG stoves)</td>
+<td>Load-cell platform under the cylinder</td>
+<td><code>lpg.mass</code></td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>Power:</strong> a single 18650 cell. The MCU sleeps and wakes every 2 minutes to sample. It sends one batch every 6 hours over LTE Cat-1/2G (or via a LoRa gateway, see §5). Target battery life: 6 months or more.</li>
+<li><strong>How Titan uses it:</strong> cooking sessions are detected when the temperature rises above 60 °C and end when it falls below 45 °C. Sessions under 10 minutes are ignored. All thresholds are set per project. Sessions × the project&#39;s baseline fuel parameters give the reductions.</li>
+<li><strong>Tamper:</strong> a temperature that stays flat for weeks on a stove that&#39;s in use is flagged for a field visit.</li>
+</ul>
+<h2>4. Solar / PAYG node (<code>titan-solar-v1</code>, <code>paygo-appliance-v1</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Measurement</th>
+<th>Source</th>
+<th>Metric</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Energy produced, power</td>
+<td>Inverter or charge controller over RS485 Modbus (Victron, EPEver, Growatt and similar) or a clamp-on CT meter</td>
+<td><code>solar.energy</code>, <code>solar.power</code></td>
+</tr>
+<tr>
+<td>Battery</td>
+<td>Same Modbus link</td>
+<td><code>power.battery_soc</code>, <code>power.voltage</code></td>
+</tr>
+<tr>
+<td>Appliance use (freezer, pump)</td>
+<td>Relay feedback or current sensor</td>
+<td><code>equipment.state</code>, <code>equipment.runtime</code></td>
+</tr>
+<tr>
+<td>Lock state</td>
+<td>PAYG relay</td>
+<td><code>appliance.locked</code></td>
+</tr>
+<tr>
+<td>Door openings (cooling)</td>
+<td>Reed switch</td>
+<td><code>appliance.door_opens</code>, <code>security.door</code></td>
+</tr>
+<tr>
+<td>Location (mobile assets)</td>
+<td>GPS</td>
+<td><code>location.lat</code>, <code>location.lng</code></td>
+</tr>
+</tbody></table>
+<p><strong>Commands:</strong> <code>paygo.lock</code> / <code>paygo.unlock {until}</code>. The node keeps its own unlock-until time, so it stays correct while offline and locks at expiry even without a connection.</p>
+<h2>5. Many small nodes: LoRa gateway</h2>
+<p>Where dozens of nodes sit close together (a cookstove programme in one community, a warehouse cluster):</p>
+<ul>
+<li>Nodes use LoRa to reach one gateway with Wi-Fi or GSM. Check the NCC&#39;s current band allocation before ordering radios (LoRaWAN regional parameters list Nigeria under EU863–870).</li>
+<li><strong>Each node still signs its own messages.</strong> The gateway forwards the envelopes unchanged to <code>titan/v1/&lt;nodeId&gt;/up/...</code> using its own MQTT login, and is authorised to publish for the nodes assigned to it. A compromised gateway can delay or drop data, but cannot change or invent it.</li>
+<li>Signed envelopes are about 300 bytes. For LoRa, nodes send compact readings with short metric codes inside the signed body (Device Protocol §14). Assign each node to its gateway in Titan (admin or client console → device → &quot;Connects through LoRa gateway&quot;).</li>
+</ul>
+<h2>6. Controller node (<code>titan-controller-v1</code>)</h2>
+<p>The base board plus relays (fans, pumps, aerators, valves) and 0–10 V/4–20 mA outputs.</p>
+<ul>
+<li><strong>Commands:</strong> <code>relay.set {channel, on}</code> and <code>setpoint.set {channel, value}</code>.</li>
+<li><strong>Safety:</strong> each output has a safe default (normally off). After <code>failsafe_s</code> seconds without contact, the node returns to that default. Automations in Titan switch outputs from readings on any device in the same organisation.</li>
+</ul>
+<h2>7. Bill of materials (indicative, to be priced by the hardware team)</h2>
+<table>
+<thead>
+<tr>
+<th>Node</th>
+<th>Main parts</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Kiln</td>
+<td>ESP32-S3, A7670, DS3231, 3× MAX31856 + Type-K probes, RS485 transceiver for the scale, 2 buttons, small display, IP65 box</td>
+</tr>
+<tr>
+<td>Cookstove</td>
+<td>ESP32-C3, A7670 (or LoRa radio), thermistor, 18650 + charger</td>
+</tr>
+<tr>
+<td>Solar/PAYG</td>
+<td>ESP32-S3, A7670, RS485 transceiver, relay, reed switch, GPS (optional)</td>
+</tr>
+<tr>
+<td>Controller</td>
+<td>ESP32-S3, A7670 or Wi-Fi only, 4-channel relay board, analog output board</td>
+</tr>
+</tbody></table>
+</main></body></html>

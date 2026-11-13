@@ -1,0 +1,958 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Titan Device Protocol v1</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet"><style>body{margin:0;font-family:Archivo,Inter,system-ui,sans-serif;color:#14213D;background:#fff;line-height:1.6}
+main{max-width:860px;margin:0 auto;padding:2rem 1.25rem 4rem}a{color:inherit}
+nav{max-width:860px;margin:0 auto;padding:1rem 1.25rem;display:flex;gap:1.25rem;font-size:.95rem}nav b{font-weight:800;margin-right:auto}
+h1{font-size:2.2rem;line-height:1.1;letter-spacing:-.02em}h2{margin-top:2.5rem;padding-top:.75rem;border-top:3px solid #14213D}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}th,td{text-align:left;padding:.45rem .7rem .45rem 0;border-bottom:1px solid #D5DEDA;vertical-align:top}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.88em;background:#EEF2F0;padding:.05rem .3rem;border-radius:4px}
+pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overflow-x:auto;font-size:.85rem}pre code{background:none;color:inherit;padding:0}</style></head>
+<body><nav aria-label="Docs"><b>Titan</b><a href="../index.html">Home</a><a href="index.html">Integration Guide</a><a href="device-protocol.html">Device protocol</a><a href="sensor-nodes.html">Sensor nodes</a></nav><main><h1>Titan Device Protocol v1</h1>
+<p><strong>Status:</strong> Draft for hardware review · <strong>Owner:</strong> Kitovu Technology Company Limited · <strong>Applies to:</strong> WareGuard and any third-party device connecting to Titan (<code>titan.kitovu.com.ng</code>)</p>
+<p>This document replaces Sections 3–8 of the <em>WareGuard Hardware-to-Cloud Communication Protocol Specification</em> (the earlier cloud version). Sensor acquisition, the LCD and offline local monitoring (Sections 1–2 of that document) are unchanged. Devices now talk to <strong>Titan&#39;s own MQTT broker</strong> instead of earlier cloud.</p>
+<hr>
+<h2>1. Summary of changes from the earlier spec</h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>earlier spec</th>
+<th>Titan v1</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Broker</td>
+<td><code>earlier-cloud.cloud:8883</code></td>
+<td><code>mqtt.titan.kitovu.com.ng:8883</code> (TLS 1.2+)</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>Shared username <code>device</code> + token</td>
+<td>Username = Device ID, password = device token</td>
+</tr>
+<tr>
+<td>Message integrity</td>
+<td>None</td>
+<td><strong>Every uplink message signed with the device&#39;s own Ed25519 key</strong></td>
+</tr>
+<tr>
+<td>Topics</td>
+<td><code>ds/&lt;Datastream&gt;</code></td>
+<td><code>titan/v1/&lt;deviceId&gt;/up/&lt;kind&gt;</code></td>
+</tr>
+<tr>
+<td>Payload</td>
+<td>One value per topic</td>
+<td>One signed envelope carrying many readings</td>
+</tr>
+<tr>
+<td>Metric names</td>
+<td><code>Temperature</code>, <code>Humidity</code>…</td>
+<td>Registry keys: <code>air.temperature</code>, <code>air.humidity</code>…</td>
+</tr>
+<tr>
+<td>Ordering / dedupe</td>
+<td>None</td>
+<td>Monotonic sequence number <code>seq</code></td>
+</tr>
+<tr>
+<td>Moisture</td>
+<td>One calibrated value</td>
+<td>Raw value <strong>and</strong> calibrated value + calibration profile ID</td>
+</tr>
+<tr>
+<td>Reporting interval</td>
+<td>Hard-coded</td>
+<td>Set by Titan admin, pushed to device (<code>down/config</code>)</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>2. Connection</h2>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Host</td>
+<td><code>mqtt.titan.kitovu.com.ng</code></td>
+</tr>
+<tr>
+<td>Port</td>
+<td><code>8883</code> (MQTT over TLS). Port <code>443</code> WebSocket (<code>wss://mqtt.titan.kitovu.com.ng/mqtt</code>) for networks that block 8883</td>
+</tr>
+<tr>
+<td>MQTT version</td>
+<td>3.1.1 (5.0 accepted)</td>
+</tr>
+<tr>
+<td>Client ID</td>
+<td>Device ID, e.g. <code>WG-000123</code></td>
+</tr>
+<tr>
+<td>Username</td>
+<td>Device ID</td>
+</tr>
+<tr>
+<td>Password</td>
+<td>Device token (issued at provisioning, 32 bytes, base64url)</td>
+</tr>
+<tr>
+<td>Keepalive</td>
+<td>60 s (Wi-Fi), 120 s (GSM)</td>
+</tr>
+<tr>
+<td>Clean session</td>
+<td><code>false</code> (so QoS 1 downlinks queued while offline are delivered on reconnect)</td>
+</tr>
+<tr>
+<td>TLS</td>
+<td>Must validate server certificate chain (ISRG Root X1 — Let&#39;s Encrypt). Pin the root, not the leaf</td>
+</tr>
+<tr>
+<td>Last Will</td>
+<td>Topic <code>titan/v1/&lt;deviceId&gt;/up/lwt</code>, payload <code>offline</code>, QoS 1, retain false</td>
+</tr>
+</tbody></table>
+<p><strong>Device ID format:</strong> <code>&lt;PREFIX&gt;-&lt;6+ digits&gt;</code>. WareGuard uses <code>WG-</code>. Third-party manufacturers are assigned their own prefix at onboarding.</p>
+<p><strong>GSM note:</strong> use a modem with native TLS 1.2 (e.g. SIMCom A7670 / SIM7600 class). SIM800-class modems cannot do modern TLS reliably and are not supported.</p>
+<hr>
+<h2>3. Topics</h2>
+<p>Uplink (device → Titan), all QoS 1:</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>titan/v1/&lt;deviceId&gt;/up/telemetry</code></td>
+<td>Routine readings (batched)</td>
+</tr>
+<tr>
+<td><code>titan/v1/&lt;deviceId&gt;/up/event</code></td>
+<td>Immediate events (intruder, threshold breach, sensor fault)</td>
+</tr>
+<tr>
+<td><code>titan/v1/&lt;deviceId&gt;/up/state</code></td>
+<td>Heartbeat / device health</td>
+</tr>
+<tr>
+<td><code>titan/v1/&lt;deviceId&gt;/up/ack</code></td>
+<td>Acknowledges a config or command</td>
+</tr>
+<tr>
+<td><code>titan/v1/&lt;deviceId&gt;/up/lwt</code></td>
+<td>Last Will (set at connect; not sent manually)</td>
+</tr>
+</tbody></table>
+<p>Downlink (Titan → device). The device subscribes to <code>titan/v1/&lt;deviceId&gt;/down/#</code>, QoS 1:</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>titan/v1/&lt;deviceId&gt;/down/config</code></td>
+<td>Full configuration document (retained)</td>
+</tr>
+<tr>
+<td><code>titan/v1/&lt;deviceId&gt;/down/cmd</code></td>
+<td>One-off commands (acknowledge alarm, reboot, sync time)</td>
+</tr>
+</tbody></table>
+<p>The broker enforces that a device can only publish and subscribe under its own <code>&lt;deviceId&gt;</code>.</p>
+<hr>
+<h2>4. Uplink envelope</h2>
+<p>Every uplink payload (except <code>lwt</code>) is a small JSON wrapper:</p>
+<pre><code class="language-json">{&quot;k&quot;:&quot;k1&quot;,&quot;p&quot;:&quot;&lt;base64url(body)&gt;&quot;,&quot;s&quot;:&quot;&lt;base64url(signature)&gt;&quot;}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>k</code></td>
+<td>Key ID of the signing key (lets keys be rotated)</td>
+</tr>
+<tr>
+<td><code>p</code></td>
+<td>The <strong>body</strong>, a UTF-8 JSON document, base64url-encoded (no padding)</td>
+</tr>
+<tr>
+<td><code>s</code></td>
+<td>Ed25519 signature over the exact bytes of the decoded body, base64url (no padding)</td>
+</tr>
+</tbody></table>
+<p>Signing the exact body bytes means there is no JSON canonicalisation problem: the device signs whatever string it produced, and Titan verifies those same bytes. Titan stores the original <code>p</code> and <code>s</code> so any reading can later be re-verified by a third party (lender, auditor) using the device&#39;s public key.</p>
+<h3>4.1 Body</h3>
+<pre><code class="language-json">{
+  &quot;v&quot;: 1,
+  &quot;dev&quot;: &quot;WG-000123&quot;,
+  &quot;seq&quot;: 1042,
+  &quot;ts&quot;: 1763022600,
+  &quot;up&quot;: 86400123,
+  &quot;buf&quot;: false,
+  &quot;fw&quot;: &quot;1.3.0&quot;,
+  &quot;r&quot;: [
+    {&quot;m&quot;: &quot;air.temperature&quot;, &quot;v&quot;: 28.5, &quot;ch&quot;: &quot;z1/dht22&quot;},
+    {&quot;m&quot;: &quot;air.humidity&quot;, &quot;v&quot;: 74.2, &quot;ch&quot;: &quot;z1/dht22&quot;},
+    {&quot;m&quot;: &quot;produce.moisture_raw&quot;, &quot;v&quot;: 2310, &quot;ch&quot;: &quot;z1/stack-a/mst1&quot;},
+    {&quot;m&quot;: &quot;produce.moisture&quot;, &quot;v&quot;: 12.8, &quot;ch&quot;: &quot;z1/stack-a/mst1&quot;, &quot;cal&quot;: &quot;maize-cap-v2&quot;},
+    {&quot;m&quot;: &quot;security.motion&quot;, &quot;v&quot;: 0, &quot;ch&quot;: &quot;z1/pir1&quot;}
+  ]
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>v</code></td>
+<td>int</td>
+<td>yes</td>
+<td>Body version, <code>1</code></td>
+</tr>
+<tr>
+<td><code>dev</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Device ID. Must match the MQTT username</td>
+</tr>
+<tr>
+<td><code>seq</code></td>
+<td>uint32</td>
+<td>yes</td>
+<td>Message sequence number. Increments by 1 for <strong>every</strong> uplink message, persisted in flash across reboots. Never reused</td>
+</tr>
+<tr>
+<td><code>ts</code></td>
+<td>int</td>
+<td>yes</td>
+<td>Time the readings were taken, Unix seconds UTC. <code>0</code> if the clock has never been synced</td>
+</tr>
+<tr>
+<td><code>up</code></td>
+<td>int</td>
+<td>yes</td>
+<td>Milliseconds since boot when the readings were taken</td>
+</tr>
+<tr>
+<td><code>upn</code></td>
+<td>int</td>
+<td>if <code>ts</code>=0</td>
+<td>Milliseconds since boot at the moment of sending. Lets Titan estimate <code>ts</code> when the clock was not synced</td>
+</tr>
+<tr>
+<td><code>buf</code></td>
+<td>bool</td>
+<td>yes</td>
+<td><code>true</code> if this message was stored during an outage and is being sent late</td>
+</tr>
+<tr>
+<td><code>fw</code></td>
+<td>string</td>
+<td>no</td>
+<td>Firmware version (send at least in <code>state</code>)</td>
+</tr>
+<tr>
+<td><code>r</code></td>
+<td>array</td>
+<td>telemetry/event</td>
+<td>Readings (Section 4.2)</td>
+</tr>
+<tr>
+<td><code>ev</code></td>
+<td>object</td>
+<td>event</td>
+<td>Event (Section 6)</td>
+</tr>
+<tr>
+<td><code>st</code></td>
+<td>object</td>
+<td>state</td>
+<td>Device health (Section 7)</td>
+</tr>
+<tr>
+<td><code>ack</code></td>
+<td>object</td>
+<td>ack</td>
+<td>Acknowledgement (Section 8)</td>
+</tr>
+</tbody></table>
+<h3>4.2 Readings</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>m</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Metric key from the Titan metric registry (Section 5)</td>
+</tr>
+<tr>
+<td><code>v</code></td>
+<td>number</td>
+<td>yes</td>
+<td>Value in the metric&#39;s canonical unit (no unit conversion on the device beyond the canonical unit)</td>
+</tr>
+<tr>
+<td><code>ch</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Channel: where the sensor is, as <code>zone/stack/sensor</code> or <code>zone/sensor</code>. Titan maps channels to warehouse zones and stacks</td>
+</tr>
+<tr>
+<td><code>cal</code></td>
+<td>string</td>
+<td>for calibrated values</td>
+<td>Calibration profile ID used to produce <code>v</code></td>
+</tr>
+<tr>
+<td><code>q</code></td>
+<td>string</td>
+<td>no</td>
+<td>Device-side quality flag: <code>ok</code> (default), <code>suspect</code>, <code>fault</code></td>
+</tr>
+</tbody></table>
+<p><strong>Moisture rule:</strong> always send both <code>produce.moisture_raw</code> (the sensor&#39;s raw reading) and <code>produce.moisture</code> (calibrated, % wet basis) with the <code>cal</code> profile ID. If a calibration curve is later corrected, Titan can recompute history from the raw value.</p>
+<h3>4.3 Signing (Ed25519)</h3>
+<ol>
+<li>Build the body JSON string <code>B</code> (any key order and whitespace).</li>
+<li><code>sig = Ed25519_sign(device_private_key, bytes(B))</code>.</li>
+<li>Publish <code>{&quot;k&quot;:&quot;&lt;keyId&gt;&quot;,&quot;p&quot;:base64url(B),&quot;s&quot;:base64url(sig)}</code>.</li>
+</ol>
+<p>Implementation notes for ESP32:</p>
+<ul>
+<li>Use Monocypher or libsodium (<code>crypto_sign_detached</code>). Signing takes a few milliseconds on ESP32.</li>
+<li>The private key is generated <strong>on the device</strong> at provisioning and stored in an <strong>encrypted NVS partition</strong> (ESP32 flash encryption + secure boot v2 enabled in production builds). Only the public key leaves the device.</li>
+<li>Base64url: standard base64 with <code>+</code>→<code>-</code>, <code>/</code>→<code>_</code>, padding <code>=</code> removed.</li>
+</ul>
+<p>Third-party devices that cannot do Ed25519 may be approved for <code>HMAC-SHA256</code> (key ID prefix <code>h</code>), but readings from those devices are labelled <em>integrity: shared-secret</em> rather than <em>integrity: device-signed</em> in the API.</p>
+<h3>4.4 What Titan does with each message</h3>
+<ol>
+<li>Checks the MQTT username matches <code>dev</code>.</li>
+<li>Verifies the signature against the registered public key for <code>k</code>. Fails → message rejected and logged as a tamper event.</li>
+<li>Drops duplicates by (<code>dev</code>, <code>seq</code>).</li>
+<li>Validates each reading against the metric registry (known metric, numeric, within plausible range). Out-of-range values are stored with quality <code>rejected</code> rather than silently dropped.</li>
+<li>Labels readings <code>live</code> or <code>buffered</code>, and <code>time_estimated</code> if <code>ts</code> was 0.</li>
+<li>Adds derived metrics (dew point, equilibrium moisture content, safe-storage indicators).</li>
+<li>Evaluates alert rules and meters usage.</li>
+</ol>
+<hr>
+<h2>5. Metric registry (initial)</h2>
+<p>Device firmware must use these keys and units. New metrics are added by Titan admins; devices should never invent keys.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Unit</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>air.temperature</code></td>
+<td>°C</td>
+<td>Ambient</td>
+</tr>
+<tr>
+<td><code>air.humidity</code></td>
+<td>%RH</td>
+<td>Ambient</td>
+</tr>
+<tr>
+<td><code>air.co2</code></td>
+<td>ppm</td>
+<td>Spoilage / insect respiration indicator</td>
+</tr>
+<tr>
+<td><code>air.o2</code></td>
+<td>%</td>
+<td></td>
+</tr>
+<tr>
+<td><code>air.ethylene</code></td>
+<td>ppm</td>
+<td></td>
+</tr>
+<tr>
+<td><code>air.ammonia</code></td>
+<td>ppm</td>
+<td></td>
+</tr>
+<tr>
+<td><code>air.phosphine</code></td>
+<td>ppm</td>
+<td>Fumigation safety</td>
+</tr>
+<tr>
+<td><code>air.smoke</code></td>
+<td>0/1</td>
+<td></td>
+</tr>
+<tr>
+<td><code>air.pm25</code></td>
+<td>µg/m³</td>
+<td></td>
+</tr>
+<tr>
+<td><code>air.light</code></td>
+<td>lux</td>
+<td></td>
+</tr>
+<tr>
+<td><code>produce.moisture</code></td>
+<td>% wet basis</td>
+<td>Calibrated, with <code>cal</code></td>
+</tr>
+<tr>
+<td><code>produce.moisture_raw</code></td>
+<td>raw counts</td>
+<td>Sensor-specific</td>
+</tr>
+<tr>
+<td><code>produce.temperature</code></td>
+<td>°C</td>
+<td>Core/stack temperature (temperature cables)</td>
+</tr>
+<tr>
+<td><code>produce.weight</code></td>
+<td>kg</td>
+<td>Load cells</td>
+</tr>
+<tr>
+<td><code>produce.level</code></td>
+<td>%</td>
+<td>Bin/silo fill</td>
+</tr>
+<tr>
+<td><code>produce.insect_activity</code></td>
+<td>count/h</td>
+<td>Acoustic probes or traps</td>
+</tr>
+<tr>
+<td><code>security.motion</code></td>
+<td>0/1</td>
+<td>PIR state</td>
+</tr>
+<tr>
+<td><code>security.door</code></td>
+<td>0/1</td>
+<td>1 = open</td>
+</tr>
+<tr>
+<td><code>security.tamper</code></td>
+<td>0/1</td>
+<td>Enclosure/vibration</td>
+</tr>
+<tr>
+<td><code>water.temperature</code></td>
+<td>°C</td>
+<td>Aquaponics/hydroponics</td>
+</tr>
+<tr>
+<td><code>water.ph</code></td>
+<td>pH</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.ec</code></td>
+<td>mS/cm</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.tds</code></td>
+<td>ppm</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.do</code></td>
+<td>mg/L</td>
+<td>Dissolved oxygen</td>
+</tr>
+<tr>
+<td><code>water.orp</code></td>
+<td>mV</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.ammonia</code></td>
+<td>mg/L</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.nitrite</code></td>
+<td>mg/L</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.nitrate</code></td>
+<td>mg/L</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.turbidity</code></td>
+<td>NTU</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.level</code></td>
+<td>cm</td>
+<td></td>
+</tr>
+<tr>
+<td><code>water.flow</code></td>
+<td>L/min</td>
+<td></td>
+</tr>
+<tr>
+<td><code>soil.moisture</code></td>
+<td>%VWC</td>
+<td></td>
+</tr>
+<tr>
+<td><code>soil.temperature</code></td>
+<td>°C</td>
+<td></td>
+</tr>
+<tr>
+<td><code>power.mains</code></td>
+<td>0/1</td>
+<td></td>
+</tr>
+<tr>
+<td><code>power.voltage</code></td>
+<td>V</td>
+<td></td>
+</tr>
+<tr>
+<td><code>power.current</code></td>
+<td>A</td>
+<td></td>
+</tr>
+<tr>
+<td><code>power.energy</code></td>
+<td>kWh</td>
+<td>Cumulative</td>
+</tr>
+<tr>
+<td><code>power.battery_soc</code></td>
+<td>%</td>
+<td>Solar/backup battery</td>
+</tr>
+<tr>
+<td><code>equipment.state</code></td>
+<td>0/1</td>
+<td>Fan, pump, aerator; channel names the equipment</td>
+</tr>
+<tr>
+<td><code>equipment.runtime</code></td>
+<td>h</td>
+<td>Cumulative</td>
+</tr>
+<tr>
+<td><code>kiln.temperature</code></td>
+<td>°C</td>
+<td>One channel per probe, e.g. <code>k1/top</code>, <code>k1/bottom</code></td>
+</tr>
+<tr>
+<td><code>feedstock.mass</code></td>
+<td>kg</td>
+<td>One reading per weighing</td>
+</tr>
+<tr>
+<td><code>feedstock.moisture</code></td>
+<td>%</td>
+<td></td>
+</tr>
+<tr>
+<td><code>biochar.mass</code></td>
+<td>kg</td>
+<td>One reading per weighed bag/load; Titan sums them per batch</td>
+</tr>
+<tr>
+<td><code>stove.temperature</code></td>
+<td>°C</td>
+<td>Stove body probe, for cooking-session detection</td>
+</tr>
+<tr>
+<td><code>stove.energy</code></td>
+<td>kWh</td>
+<td>Electric cooking, cumulative</td>
+</tr>
+<tr>
+<td><code>lpg.mass</code></td>
+<td>kg</td>
+<td>LPG cylinder on a scale</td>
+</tr>
+<tr>
+<td><code>solar.energy</code></td>
+<td>kWh</td>
+<td>Cumulative from inverter or charge controller</td>
+</tr>
+<tr>
+<td><code>solar.power</code></td>
+<td>W</td>
+<td></td>
+</tr>
+<tr>
+<td><code>appliance.locked</code></td>
+<td>0/1</td>
+<td>PAYG lock state</td>
+</tr>
+<tr>
+<td><code>appliance.door_opens</code></td>
+<td>count</td>
+<td>Cumulative</td>
+</tr>
+<tr>
+<td><code>location.lat</code> / <code>location.lng</code></td>
+<td>°</td>
+<td>Mobile assets</td>
+</tr>
+<tr>
+<td><code>weather.rain</code></td>
+<td>mm</td>
+<td></td>
+</tr>
+<tr>
+<td><code>weather.wind_speed</code></td>
+<td>m/s</td>
+<td></td>
+</tr>
+<tr>
+<td><code>weather.solar_radiation</code></td>
+<td>W/m²</td>
+<td></td>
+</tr>
+</tbody></table>
+<p>Device-health values (battery, signal, uptime) go in <code>state</code> messages, not as readings.</p>
+<hr>
+<h2>6. Events (<code>up/event</code>)</h2>
+<p>Send immediately; do not wait for the next telemetry cycle.</p>
+<pre><code class="language-json">{
+  &quot;v&quot;: 1, &quot;dev&quot;: &quot;WG-000123&quot;, &quot;seq&quot;: 1043, &quot;ts&quot;: 1763022611, &quot;up&quot;: 86411002, &quot;buf&quot;: false,
+  &quot;ev&quot;: {&quot;code&quot;: &quot;intruder_detected&quot;, &quot;ch&quot;: &quot;z1/pir1&quot;, &quot;sev&quot;: &quot;critical&quot;, &quot;msg&quot;: &quot;Motion detected&quot;},
+  &quot;r&quot;: [{&quot;m&quot;: &quot;security.motion&quot;, &quot;v&quot;: 1, &quot;ch&quot;: &quot;z1/pir1&quot;}]
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Trigger</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>intruder_detected</code></td>
+<td>PIR motion state 0 → 1 (send again only after it returns to 0)</td>
+</tr>
+<tr>
+<td><code>door_opened</code></td>
+<td>Door contact opens</td>
+</tr>
+<tr>
+<td><code>tamper_detected</code></td>
+<td>Enclosure opened / vibration</td>
+</tr>
+<tr>
+<td><code>threshold_breach</code></td>
+<td>Device-side threshold exceeded (Titan also evaluates thresholds independently)</td>
+</tr>
+<tr>
+<td><code>sensor_error</code></td>
+<td>Sensor missing, out of range, or read failure. <code>ch</code> names the sensor</td>
+</tr>
+<tr>
+<td><code>power_lost</code> / <code>power_restored</code></td>
+<td>Mains state change</td>
+</tr>
+<tr>
+<td><code>boot</code></td>
+<td>Device started (include reset reason in <code>msg</code>)</td>
+</tr>
+<tr>
+<td><code>batch_start</code> / <code>batch_end</code></td>
+<td>Kiln and batch-process nodes: operator pressed start/end. <code>msg</code> carries the batch number. Titan opens and closes the carbon batch automatically</td>
+</tr>
+</tbody></table>
+<p>Severity <code>sev</code>: <code>info</code>, <code>warning</code>, <code>critical</code>.</p>
+<hr>
+<h2>7. Heartbeat (<code>up/state</code>)</h2>
+<p>Send on connect and every <code>heartbeat_s</code> seconds (from config).</p>
+<pre><code class="language-json">{
+  &quot;v&quot;: 1, &quot;dev&quot;: &quot;WG-000123&quot;, &quot;seq&quot;: 1044, &quot;ts&quot;: 1763022660, &quot;up&quot;: 86460000, &quot;buf&quot;: false, &quot;fw&quot;: &quot;1.3.0&quot;,
+  &quot;st&quot;: {&quot;net&quot;: &quot;wifi&quot;, &quot;rssi&quot;: -67, &quot;bat&quot;: 4.02, &quot;heap&quot;: 142000, &quot;bufq&quot;: 0, &quot;cfg&quot;: 7, &quot;time&quot;: &quot;ntp&quot;, &quot;err&quot;: []}
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>net</code></td>
+<td><code>wifi</code> or <code>gsm</code></td>
+</tr>
+<tr>
+<td><code>rssi</code></td>
+<td>Signal strength, dBm</td>
+</tr>
+<tr>
+<td><code>bat</code></td>
+<td>Battery voltage (omit if mains only)</td>
+</tr>
+<tr>
+<td><code>heap</code></td>
+<td>Free heap bytes</td>
+</tr>
+<tr>
+<td><code>bufq</code></td>
+<td>Messages waiting in the offline buffer</td>
+</tr>
+<tr>
+<td><code>cfg</code></td>
+<td>Config version currently applied</td>
+</tr>
+<tr>
+<td><code>time</code></td>
+<td>Clock source: <code>ntp</code>, <code>gsm</code>, <code>rtc</code>, <code>none</code></td>
+</tr>
+<tr>
+<td><code>err</code></td>
+<td>Active sensor fault codes</td>
+</tr>
+</tbody></table>
+<p>Titan marks a device <strong>offline</strong> if no message arrives within <code>3 × heartbeat_s</code>, or immediately when the broker reports the connection dropped.</p>
+<hr>
+<h2>8. Configuration and commands (downlink)</h2>
+<h3>8.1 Config (<code>down/config</code>, retained)</h3>
+<p>Titan publishes the <strong>whole</strong> config document whenever an admin changes anything. Because it is retained, a device receives the latest config every time it connects.</p>
+<pre><code class="language-json">{
+  &quot;v&quot;: 1,
+  &quot;cfg&quot;: 8,
+  &quot;interval&quot;: {&quot;telemetry_s&quot;: 10, &quot;moisture_s&quot;: 60, &quot;heartbeat_s&quot;: 60},
+  &quot;thresholds&quot;: {
+    &quot;air.temperature&quot;: {&quot;max&quot;: 35},
+    &quot;air.humidity&quot;: {&quot;max&quot;: 75},
+    &quot;produce.moisture&quot;: {&quot;max&quot;: 13.5}
+  },
+  &quot;alarm_enable&quot;: true,
+  &quot;cal&quot;: {&quot;z1/stack-a/mst1&quot;: &quot;maize-cap-v2&quot;},
+  &quot;time&quot;: 1763022700
+}
+</code></pre>
+<p>Reporting intervals are set by Titan admins per device type, per connection type (Wi-Fi/GSM), with optional per-device overrides. The device must apply the new config and reply with an <code>ack</code> carrying the <code>cfg</code> number. Titan shows a config as <em>pending</em> until it is acknowledged.</p>
+<h3>8.2 Commands (<code>down/cmd</code>, not retained)</h3>
+<pre><code class="language-json">{&quot;v&quot;: 1, &quot;id&quot;: &quot;c_8f2a&quot;, &quot;cmd&quot;: &quot;alarm_ack&quot;, &quot;args&quot;: {&quot;code&quot;: &quot;intruder_detected&quot;}}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th><code>cmd</code></th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>alarm_ack</code></td>
+<td>Silence the local alarm for the given event</td>
+</tr>
+<tr>
+<td><code>reboot</code></td>
+<td>Restart the device</td>
+</tr>
+<tr>
+<td><code>time_sync</code></td>
+<td><code>args.time</code> = current Unix time; set the clock</td>
+</tr>
+<tr>
+<td><code>send_state</code></td>
+<td>Publish a <code>state</code> message now</td>
+</tr>
+</tbody></table>
+<p>Device types can also declare their own commands (for example <code>relay.set {channel, on}</code> on a controller, or <code>paygo.lock</code> / <code>paygo.unlock {until}</code> on a pay-as-you-go appliance). Titan only sends a command the device&#39;s type lists, with arguments already checked against that list, and records who sent it (a person, an API key or an automation). The device must reply to every command with an <code>ack</code> carrying its <code>id</code>, <code>ok: false</code> and a short <code>msg</code> if it could not act.</p>
+<p>Actuating devices must keep a safe state if the connection is lost: a relay switched on by an automation should fall back to its configured default after <code>failsafe_s</code> seconds without contact (set per device in config; <code>0</code> disables it).</p>
+<h3>8.3 Acknowledgement (<code>up/ack</code>)</h3>
+<pre><code class="language-json">{&quot;v&quot;: 1, &quot;dev&quot;: &quot;WG-000123&quot;, &quot;seq&quot;: 1045, &quot;ts&quot;: 1763022702, &quot;up&quot;: 86502000, &quot;buf&quot;: false,
+ &quot;ack&quot;: {&quot;cfg&quot;: 8, &quot;ok&quot;: true}}
+</code></pre>
+<p>For a command: <code>&quot;ack&quot;: {&quot;id&quot;: &quot;c_8f2a&quot;, &quot;ok&quot;: true, &quot;msg&quot;: &quot;&quot;}</code>.</p>
+<hr>
+<h2>9. Offline operation and buffering</h2>
+<ul>
+<li>Sensor reading, LCD updates and local alarms continue with no connection.</li>
+<li>While offline, signed telemetry and event messages are stored in a flash ring buffer (recommended minimum: 72 hours at the configured interval). If the buffer fills, drop the <strong>oldest telemetry first; never drop events</strong>.</li>
+<li>Messages are signed <strong>when created</strong>, not when sent, so buffered data carries the original time and signature.</li>
+<li>On reconnect: publish <code>state</code> first, then buffered messages oldest first with <code>buf: true</code>, at most 5 messages per second, then resume live reporting.</li>
+<li>Reconnect with exponential backoff: 5 s, 10 s, 20 s… capped at 5 minutes, with random jitter.</li>
+</ul>
+<h2>10. Time</h2>
+<ul>
+<li>Wi-Fi: NTP (<code>pool.ntp.org</code>, <code>time.google.com</code>) at boot and every 6 hours.</li>
+<li>GSM: network time (<code>AT+CCLK?</code>) or NTP over the data link.</li>
+<li>A battery-backed RTC (e.g. DS3231) is strongly recommended so buffered readings keep correct time across power cuts.</li>
+<li>If the clock is unsynced, send <code>ts: 0</code> plus <code>up</code> and <code>upn</code>; Titan estimates the time and marks those readings <code>time_estimated</code>.</li>
+</ul>
+<h2>11. Provisioning</h2>
+<ol>
+<li>Titan admin registers the device (ID, type, organisation, site) and receives a one-time <strong>provisioning code</strong>.</li>
+<li>On first boot in provisioning mode, the device generates its Ed25519 key pair, then calls <code>POST https://titan.kitovu.com.ng/api/provision</code> with <code>{deviceId, code, publicKey}</code> over TLS.</li>
+<li>Titan returns the MQTT device token and key ID <code>k1</code>. The code cannot be reused.</li>
+<li>Production firmware is built with flash encryption and secure boot enabled, so the key and token cannot be read off the chip.</li>
+</ol>
+<p>Key rotation: Titan admin issues a new provisioning code; the device generates <code>k2</code>; readings signed with <code>k1</code> remain verifiable forever.</p>
+<h2>12. HTTPS fallback</h2>
+<p>Devices that cannot use MQTT may <code>POST https://titan.kitovu.com.ng/api/ingest</code> with the same envelope as the body, header <code>Authorization: Device &lt;deviceId&gt;:&lt;token&gt;</code>, and header <code>X-Titan-Kind: telemetry|event|state|ack</code>. Config is fetched with <code>GET /api/device/config</code>. MQTT is preferred because downlinks are instant.</p>
+<h2>13. Defaults for WareGuard</h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Wi-Fi</th>
+<th>GSM</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>telemetry_s</code> (temperature, humidity)</td>
+<td>10</td>
+<td>60</td>
+</tr>
+<tr>
+<td><code>moisture_s</code></td>
+<td>60</td>
+<td>300</td>
+</tr>
+<tr>
+<td><code>heartbeat_s</code></td>
+<td>60</td>
+<td>300</td>
+</tr>
+<tr>
+<td>Motion</td>
+<td>On state change only</td>
+<td>On state change only</td>
+</tr>
+</tbody></table>
+<p>All values are editable in the Titan admin panel.</p>
+<h2>14. v1.1 additions: LoRa gateways and compact readings</h2>
+<p><strong>Gateway relaying.</strong> A LoRa gateway (<code>titan-lora-gateway-v1</code>) connects to the broker with its own credentials. For each node assigned to it in Titan, it may:</p>
+<ul>
+<li>publish the node&#39;s signed envelopes, unchanged, to <code>titan/v1/&lt;nodeId&gt;/up/telemetry|event|state|ack</code></li>
+<li>subscribe to <code>titan/v1/&lt;nodeId&gt;/down/#</code> and forward configs and commands over LoRa</li>
+</ul>
+<p>It may not publish a node&#39;s <code>up/lwt</code>, and it cannot publish for unassigned nodes. Titan verifies every relayed message against the <strong>node&#39;s</strong> key, so a gateway can delay or drop data but cannot alter or invent it. The gateway reports its own health on its own <code>up/state</code> topic.</p>
+<p><strong>Compact readings.</strong> To fit LoRa payloads, a reading may be an array <code>[metric, value, channel]</code> (or <code>[metric, value, channel, cal]</code>) instead of an object. The metric may be a short code:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Metric</th>
+<th>Code</th>
+<th>Metric</th>
+<th>Code</th>
+<th>Metric</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>at</code></td>
+<td>air.temperature</td>
+<td><code>ah</code></td>
+<td>air.humidity</td>
+<td><code>ac</code></td>
+<td>air.co2</td>
+</tr>
+<tr>
+<td><code>pm</code></td>
+<td>produce.moisture</td>
+<td><code>pr</code></td>
+<td>produce.moisture_raw</td>
+<td><code>pt</code></td>
+<td>produce.temperature</td>
+</tr>
+<tr>
+<td><code>pw</code></td>
+<td>produce.weight</td>
+<td><code>sm</code></td>
+<td>security.motion</td>
+<td><code>sd</code></td>
+<td>security.door</td>
+</tr>
+<tr>
+<td><code>wt</code></td>
+<td>water.temperature</td>
+<td><code>wp</code></td>
+<td>water.ph</td>
+<td><code>wd</code></td>
+<td>water.do</td>
+</tr>
+<tr>
+<td><code>we</code></td>
+<td>water.ec</td>
+<td><code>wl</code></td>
+<td>water.level</td>
+<td><code>sl</code></td>
+<td>soil.moisture</td>
+</tr>
+<tr>
+<td><code>kt</code></td>
+<td>kiln.temperature</td>
+<td><code>fm</code></td>
+<td>feedstock.mass</td>
+<td><code>bm</code></td>
+<td>biochar.mass</td>
+</tr>
+<tr>
+<td><code>st</code></td>
+<td>stove.temperature</td>
+<td><code>se</code></td>
+<td>stove.energy</td>
+<td><code>lm</code></td>
+<td>lpg.mass</td>
+</tr>
+<tr>
+<td><code>so</code></td>
+<td>solar.energy</td>
+<td><code>sp</code></td>
+<td>solar.power</td>
+<td><code>bs</code></td>
+<td>power.battery_soc</td>
+</tr>
+<tr>
+<td><code>pv</code></td>
+<td>power.voltage</td>
+<td><code>es</code></td>
+<td>equipment.state</td>
+<td><code>al</code></td>
+<td>appliance.locked</td>
+</tr>
+<tr>
+<td><code>ad</code></td>
+<td>appliance.door_opens</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+<p>Example compact body: <code>{&quot;v&quot;:1,&quot;dev&quot;:&quot;CK-000123&quot;,&quot;seq&quot;:88,&quot;ts&quot;:1763022600,&quot;up&quot;:5000,&quot;buf&quot;:true,&quot;r&quot;:[[&quot;st&quot;,182.5,&quot;s1&quot;],[&quot;bs&quot;,88,&quot;bat&quot;]]}</code></p>
+</main></body></html>

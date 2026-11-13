@@ -202,6 +202,18 @@ Device firmware must use these keys and units. New metrics are added by Titan ad
 | `power.battery_soc` | % | Solar/backup battery |
 | `equipment.state` | 0/1 | Fan, pump, aerator; channel names the equipment |
 | `equipment.runtime` | h | Cumulative |
+| `kiln.temperature` | °C | One channel per probe, e.g. `k1/top`, `k1/bottom` |
+| `feedstock.mass` | kg | One reading per weighing |
+| `feedstock.moisture` | % | |
+| `biochar.mass` | kg | One reading per weighed bag/load; Titan sums them per batch |
+| `stove.temperature` | °C | Stove body probe, for cooking-session detection |
+| `stove.energy` | kWh | Electric cooking, cumulative |
+| `lpg.mass` | kg | LPG cylinder on a scale |
+| `solar.energy` | kWh | Cumulative from inverter or charge controller |
+| `solar.power` | W | |
+| `appliance.locked` | 0/1 | PAYG lock state |
+| `appliance.door_opens` | count | Cumulative |
+| `location.lat` / `location.lng` | ° | Mobile assets |
 | `weather.rain` | mm | |
 | `weather.wind_speed` | m/s | |
 | `weather.solar_radiation` | W/m² | |
@@ -231,6 +243,7 @@ Send immediately; do not wait for the next telemetry cycle.
 | `sensor_error` | Sensor missing, out of range, or read failure. `ch` names the sensor |
 | `power_lost` / `power_restored` | Mains state change |
 | `boot` | Device started (include reset reason in `msg`) |
+| `batch_start` / `batch_end` | Kiln and batch-process nodes: operator pressed start/end. `msg` carries the batch number. Titan opens and closes the carbon batch automatically |
 
 Severity `sev`: `info`, `warning`, `critical`.
 
@@ -298,6 +311,10 @@ Reporting intervals are set by Titan admins per device type, per connection type
 | `reboot` | Restart the device |
 | `time_sync` | `args.time` = current Unix time; set the clock |
 | `send_state` | Publish a `state` message now |
+
+Device types can also declare their own commands (for example `relay.set {channel, on}` on a controller, or `paygo.lock` / `paygo.unlock {until}` on a pay-as-you-go appliance). Titan only sends a command the device's type lists, with arguments already checked against that list, and records who sent it (a person, an API key or an automation). The device must reply to every command with an `ack` carrying its `id`, `ok: false` and a short `msg` if it could not act.
+
+Actuating devices must keep a safe state if the connection is lost: a relay switched on by an automation should fall back to its configured default after `failsafe_s` seconds without contact (set per device in config; `0` disables it).
 
 ### 8.3 Acknowledgement (`up/ack`)
 

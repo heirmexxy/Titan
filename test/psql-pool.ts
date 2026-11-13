@@ -30,6 +30,9 @@ function parseCsv(text: string): string[][] {
 /** Best-effort typing of psql text output: JSON documents and Postgres arrays. Numbers and booleans stay strings. */
 function convert(v: string | undefined): unknown {
   if (v === undefined || v === '') return null;
+  if (v === 't') return true;
+  if (v === 'f') return false;
+  if (/^-?\d+(\.\d+)?(e-?\d+)?$/.test(v) && v.length <= 15) return Number(v);
   if (v.startsWith('{') || v.startsWith('[')) {
     try { return JSON.parse(v); } catch { /* not JSON */ }
     if (v.startsWith('{') && v.endsWith('}')) return v.slice(1, -1).split(',').filter(Boolean).map((x) => x.replace(/^"|"$/g, ''));

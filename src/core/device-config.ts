@@ -7,6 +7,8 @@ export interface DeviceConfigDoc {
   thresholds: Record<string, { min?: number; max?: number }>;
   alarm_enable: boolean;
   cal: Record<string, string>;
+  /** Seconds without contact before actuators return to their safe default; 0 = off. */
+  failsafe_s: number;
   time: number;
 }
 
@@ -35,6 +37,7 @@ export function buildDeviceConfig(device: Device, version: number, now = new Dat
     thresholds: o?.thresholds ?? {},
     alarm_enable: o?.alarm_enable ?? true,
     cal: o?.cal ?? {},
+    failsafe_s: Number.isInteger(o?.failsafe_s) && o.failsafe_s >= 0 ? o.failsafe_s : 0,
     time: Math.floor(now.getTime() / 1000),
   };
 }

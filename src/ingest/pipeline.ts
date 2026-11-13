@@ -25,6 +25,13 @@ export interface Notifier {
   emit(event: string, ctx: { orgId: string; siteId: string | null }, data: unknown): Promise<void>;
 }
 
+/** Extensions (actuators, carbon) that react to ingested data. Errors are logged, never block ingestion. */
+export interface PipelineHook {
+  onReadings?(device: Device, rows: ReadingRow[], live: boolean): Promise<void>;
+  onEvent?(device: Device, ev: NonNullable<Body['ev']>, time: Date): Promise<void>;
+  onAck?(device: Device, ack: NonNullable<Body['ack']>, at: Date): Promise<void>;
+}
+
 export type IngestResult =
   | { status: 'accepted'; seq: number; readings: number; rejected: string[]; alertsOpened: number }
   | { status: 'duplicate'; seq: number }
@@ -34,7 +41,13 @@ const VPD_SITE_KINDS = new Set(['greenhouse', 'hydroponics', 'aquaponics']);
 const SEVERITY = new Set(['info', 'warning', 'critical']);
 
 export class IngestPipeline {
-  constructor(private store: Store, private notifier: Notifier) {}
+  constructor(private store: Store, private notifier: Notifier, private hooks: PipelineHook[] = []) {}
+
+  private async runHooks(fn: (h: PipelineHook) => Promise<void> | undefined) {
+    for (const h of this.hooks) {
+      try { await fn(h); } catch (e) { console.error(JSON.stringify({ level: 'error', msg: 'pipeline hook failed', err: String((e as Error)?.stack ?? e) })); }
+    }
+  }
 
   async handle(deviceId: string, kind: MessageKind, raw: string | Buffer, receivedAt = new Date()): Promise<IngestResult> {
     const device = await this.store.getDevice(deviceId);
@@ -113,6 +126,9 @@ export class IngestPipeline {
     let alertsOpened = 0;
     if (kind === 'event' && body.ev) alertsOpened += await this.handleEvent(device, body, time);
     if (kind === 'ack' && body.ack?.cfg !== undefined && body.ack.ok) await this.store.ackConfig(deviceId, body.ack.cfg, receivedAt);
+    if (kind === 'ack' && body.ack) await this.runHooks((h) => h.onAck?.(device, body.ack!, receivedAt));
+    if (kind === 'event' && body.ev) await this.runHooks((h) => h.onEvent?.(device, body.ev!, time));
+    if (rows.length) await this.runHooks((h) => h.onReadings?.(device, rows.filter((r) => r.quality !== 'rejected'), !body.buf));
 
     // Threshold rules run on live readings only; buffered history is stored but does not page anyone.
     if (!body.buf) alertsOpened += await this.evaluateRules(device, rows.filter((r) => r.quality !== 'rejected'), metrics);

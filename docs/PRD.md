@@ -100,10 +100,26 @@ Webhooks are signed: header `X-Titan-Signature: t=<unix>,v1=<hex HMAC-SHA256(sec
 - **Client console** (`/console`): sites, devices, charts, API keys, grants, webhooks, alert rules, usage and invoices.
 - **API docs** (`/docs`).
 
+### 5.10 Device control
+- Each device type declares its commands (name, arguments with types and ranges, and who may send them: admin, ops, API, automation). Built-in: `alarm_ack`, `send_state`, `time_sync`, `reboot`.
+- Every command is validated, logged with its sender, published to the device and marked `acked` or `failed` from the device's reply.
+- Automations: a reading condition (metric, limit, duration, clear margin) on any device sends a command to a target device of the same organisation, with an optional command when it clears and a cooldown. Actuators fall back to a safe default after `failsafe_s` without contact.
+- API: `GET/POST /v1/devices/:id/commands` (scope `control:devices`, owner only).
+
+### 5.11 Carbon
+- Projects (owner org, sites, method, registry, parameters) with activities: biochar **batches** (opened and closed by kiln-node button events, or manually) and cookstove **periods**.
+- Measurements and lab results are append-only; corrections supersede. Certificates are recorded by file name and SHA-256 fingerprint.
+- Methods: `biochar-v1` (dry biochar × organic carbon × permanence factor from held kiln temperature × 44/12, less project emissions and buffer; H/Corg ≤ 0.7) and `cookstove-v1` (sessions from stove temperature × baseline fuel parameters × fNRB × emission factor). Results store inputs and the signed-message range behind each.
+- Verifiers and buyers read projects through data grants (scope `read:carbon`); owners write with `write:carbon`.
+- Parameters must be aligned with the registry methodology before credits are issued.
+
+### 5.12 Retention
+Retention is set per organisation (default 2 years, up to 20) so carbon projects can keep data for their full crediting period. A nightly job removes readings and raw messages past each organisation's period.
+
 ## 6. Non-functional
 
 - Hosting: second Hostinger KVM 2 (the one not running Abia ADDS), native installs (no Docker): PostgreSQL 16 + TimescaleDB, EMQX, Node 22 under systemd, Nginx + Let's Encrypt.
-- Retention: raw readings 2 years; 1-minute, 1-hour and 1-day aggregates kept indefinitely; raw signed messages 2 years.
+- Retention: per organisation (default 2 years); see 5.12.
 - Backups: nightly `pg_dump` off-site to Google Drive.
 - Security: TLS everywhere, device Ed25519 signatures, hashed API keys and device tokens, per-device ACLs in the broker, audit log of admin actions, rate limits per key.
 - Capacity target for v1: 500 devices at 10 s intervals (~4.3M readings/day) on one KVM 2; database moves to its own server when outside clients grow.

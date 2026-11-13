@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Titan by Kitovu: connect, verify and share data from any IoT device</title>
-<meta name="description" content="Titan connects warehouse, farm, water and power sensors to one platform. Every reading is signed by the device that took it, so your team, your systems and your lenders can trust it.">
+<meta name="description" content="Titan connects warehouse, farm, energy and carbon sensors to one platform. Every reading is signed by the device that took it, so your team, your systems and your lenders can trust it.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
@@ -192,7 +192,7 @@
     <div class="wrap">
       <div>
         <h1 id="hero-title" class="display">Know what's happening at every site. And prove it.</h1>
-        <p class="lede">Titan connects your warehouse, farm, water and power sensors to one place. You get alerts the moment something goes wrong, and data your systems and your lenders can trust.</p>
+        <p class="lede">Titan connects your warehouse, farm, energy and carbon sensors to one place. You get alerts the moment something goes wrong, control over the equipment that fixes it, and data your systems, lenders and carbon verifiers can trust.</p>
         <div class="actions">
           <a class="btn btn-primary" href="#demo">Book a demo</a>
           <a class="btn btn-ghost" href="#how">See how it works</a>
@@ -263,8 +263,8 @@
           <p>Point any MQTT or HTTPS device at Titan, or install WareGuard. Each device gets its own key, so every reading it sends is signed.</p>
         </li>
         <li>
-          <h3>See and get alerted</h3>
-          <p>Watch every site on one dashboard. Set limits once and get an SMS or email the moment a reading crosses them, or a device goes quiet.</p>
+          <h3>See, get alerted and act</h3>
+          <p>Watch every site on one dashboard. Get an SMS or email the moment a reading crosses a limit, and let Titan switch on the fan, pump or aerator that fixes it. Every command is logged.</p>
         </li>
         <li>
           <h3>Share with the people who need it</h3>
@@ -286,6 +286,9 @@
           <tr><th scope="row">Cold rooms and cold chain</th><td>Prove the cold chain held, from intake to dispatch.</td><td class="m data">Temperature, door, power, battery</td></tr>
           <tr><th scope="row">Poultry houses</th><td>Protect flocks from heat stress and bad air.</td><td class="m data">Temperature, humidity, ammonia, fans</td></tr>
           <tr><th scope="row">Irrigation and solar power</th><td>Know pumps are running and batteries are charged without driving out to check.</td><td class="m data">Flow, soil moisture, voltage, energy, battery charge</td></tr>
+          <tr><th scope="row">Pay-as-you-go appliances</th><td>Track usage and location, lock and unlock units as payments arrive, and show financiers the assets behind your receivables.</td><td class="m data">Energy, runtime, door openings, location, lock state</td></tr>
+          <tr><th scope="row">Clean cookstoves</th><td>Count real cooking sessions from every stove instead of surveys, and turn them into emission reductions.</td><td class="m data">Stove temperature, cooking energy, LPG use</td></tr>
+          <tr><th scope="row">Biochar and carbon removal</th><td>Record every batch from kiln to scale, add lab results, and get tonnes of carbon removed with every input traceable.</td><td class="m data">Kiln temperatures, feedstock and biochar weights, lab carbon</td></tr>
         </tbody>
       </table>
     </div>
@@ -297,7 +300,8 @@
       <div>
         <h2 id="dev-title" class="display">Built for the people wiring it up</h2>
         <p>Hardware makers get a published device protocol, MQTT over TLS with an HTTPS fallback, and offline buffering that keeps the original timestamps.</p>
-        <p>Software teams get a REST API, signed webhooks, and readings aggregated by minute, hour or day.</p>
+        <p>Software teams get a REST API, signed webhooks, device commands, and readings aggregated by minute, hour or day.</p>
+        <p>No sensors yet? We supply Titan nodes for kilns, cookstoves, solar systems and controllers, built on the same protocol.</p>
         <p><a href="/docs/">Read the API docs</a> or <a href="/docs/device-protocol-v1.md">the device protocol</a></p>
       </div>
       <div>
@@ -328,6 +332,7 @@ curl https://titan.kitovu.com.ng/v1/readings \
         <li>Readings stored during a network outage keep their original time and signature.</li>
         <li>Anyone you share with can check any reading against the device's public key themselves.</li>
         <li>Every access to shared data is logged against the permission that allowed it.</li>
+        <li>Carbon results link each tonne back to the signed readings and lab certificates it came from, so verifiers can check them line by line.</li>
       </ul>
     </div>
   </section>
@@ -358,6 +363,7 @@ curl https://titan.kitovu.com.ng/v1/readings \
             <li>Loans declined because conditions can't be shown</li>
             <li>A dashboard for every device and none for the business</li>
             <li>Months of engineering spent on IoT plumbing</li>
+            <li>Carbon claims built on surveys and estimates</li>
           </ul>
         </div>
         <div class="with">
@@ -367,6 +373,7 @@ curl https://titan.kitovu.com.ng/v1/readings \
             <li>Condition history lenders and insurers accept</li>
             <li>Every site and device in one view</li>
             <li>Your team building your product, not infrastructure</li>
+            <li>Carbon results backed by measured data</li>
           </ul>
         </div>
       </div>
@@ -394,6 +401,9 @@ curl https://titan.kitovu.com.ng/v1/readings \
             <option value="cold_chain">Cold rooms or cold chain</option>
             <option value="poultry">Poultry houses</option>
             <option value="energy">Irrigation or solar power</option>
+            <option value="paygo">Pay-as-you-go appliances</option>
+            <option value="cookstoves">Clean cookstoves</option>
+            <option value="biochar">Biochar or carbon removal</option>
             <option value="data_access">I want access to site data (lender, insurer, buyer)</option>
             <option value="hardware">I make devices and want to connect them</option>
             <option value="other">Something else</option>

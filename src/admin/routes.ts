@@ -1,6 +1,10 @@
 import { randomToken, sha256Hex } from '../core/crypto.js';
 import { HttpError, type Req, type Router } from '../http/router.js';
 import type { DeviceService } from '../ingest/devices.js';
+import { checkPolicy, CommandError, findCommand, validateArgs, type CommandSpec } from '../actuators/catalogue.js';
+import type { ActuatorService } from '../actuators/service.js';
+import { CarbonError, type CarbonService } from '../carbon/service.js';
+import { MEASUREMENT_KINDS } from '../carbon/methodologies.js';
 import { clearCookie, hashPassword, parseCookies, SESSION_COOKIE, SESSION_DAYS, sessionCookie, verifyPassword } from './auth.js';
 
 interface Pool { query(text: string, values?: unknown[]): Promise<{ rows: any[]; rowCount: number | null }> }
@@ -9,12 +13,14 @@ export interface AdminDeps {
   pool: Pool;
   devices: DeviceService;
   secureCookies: boolean;
+  actuators?: ActuatorService;
+  carbon?: CarbonService;
 }
 
 interface Session { userId: string; email: string; name: string | null; role: 'admin' | 'ops' }
 
 const SITE_KINDS = ['warehouse', 'aquaponics', 'hydroponics', 'greenhouse', 'cold_room', 'poultry', 'field', 'energy', 'other'];
-const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants'];
+const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon'];
 const DEVICE_ID = /^[A-Z]{2,6}-\d{6,}$/;
 const INTERVAL_KEYS = ['telemetry_s', 'moisture_s', 'heartbeat_s'];
 
@@ -272,11 +278,23 @@ export function registerAdmin(r: Router, d: AdminDeps) {
   });
   r.post('/admin/api/devices/:id/command', async (req) => {
     const s = await session(req);
-    const cmd = req.body?.cmd;
-    if (!['alarm_ack', 'reboot', 'time_sync', 'send_state'].includes(cmd)) throw new HttpError(400, 'invalid_command');
-    const id = await d.devices.sendCommand(req.params.id, cmd, typeof req.body?.args === 'object' ? req.body.args : {});
-    await audit(s, 'device.command', req.params.id, { cmd, id });
-    return { body: { commandId: id } };
+    const cmd = String(req.body?.cmd ?? '');
+    const args = typeof req.body?.args === 'object' && req.body.args ? req.body.args : {};
+    let out;
+    if (d.actuators) {
+      try { out = await d.actuators.send(req.params.id, cmd, args, { source: s.role, actor: `user:${s.userId}` }); }
+      catch (e) { if (e instanceof CommandError) throw new HttpError(e.code === 'not_allowed' ? 403 : 400, e.code, e.message); throw e; }
+    } else {
+      if (!['alarm_ack', 'reboot', 'time_sync', 'send_state'].includes(cmd)) throw new HttpError(400, 'invalid_command');
+      out = { id: await d.devices.sendCommand(req.params.id, cmd as 'reboot', args) };
+    }
+    await audit(s, 'device.command', req.params.id, { cmd, args, id: out.id });
+    return { body: { commandId: out.id } };
+  });
+  r.get('/admin/api/devices/:id/commands', async (req) => {
+    await session(req);
+    if (!d.actuators) return { body: { available: [], history: [] } };
+    return { body: { available: await d.actuators.catalogue(req.params.id), history: await d.actuators.history(req.params.id, 30) } };
   });
   r.post('/admin/api/devices/:id/status', async (req) => {
     const s = await session(req, 'admin');
@@ -487,4 +505,147 @@ export function registerAdmin(r: Router, d: AdminDeps) {
     await audit(s, 'user.password_changed', s.userId);
     return { body: { ok: true }, headers: { 'Set-Cookie': clearCookie(d.secureCookies) } };
   });
+
+  // ---------- Command catalogues and automations ----------
+  r.post('/admin/api/device-types/:id/commands', async (req) => {
+    const s = await session(req, 'admin');
+    const list = req.body?.commands;
+    if (!Array.isArray(list)) throw new HttpError(400, 'invalid_request', 'commands must be a list');
+    for (const c of list as CommandSpec[]) {
+      if (!c || typeof c.name !== 'string' || !/^[a-z][a-z0-9_.]{1,40}$/.test(c.name)) throw new HttpError(400, 'invalid_command', 'Command names: lowercase letters, digits, dots and underscores');
+      if (['alarm_ack', 'reboot', 'time_sync', 'send_state'].includes(c.name)) throw new HttpError(400, 'reserved', `${c.name} is built in`);
+      if (typeof c.args !== 'object' || c.args === null) throw new HttpError(400, 'invalid_command', `${c.name}: args must be an object`);
+      for (const [k, a] of Object.entries(c.args)) if (!['string', 'number', 'boolean'].includes((a as any)?.type)) throw new HttpError(400, 'invalid_command', `${c.name}.${k}: type must be string, number or boolean`);
+      if (c.allow && (!Array.isArray(c.allow) || c.allow.some((x) => !['admin', 'ops', 'api', 'automation'].includes(x)))) throw new HttpError(400, 'invalid_command', `${c.name}: allow must list admin, ops, api or automation`);
+    }
+    const upd = await q(`UPDATE device_types SET commands = $2 WHERE id = $1`, [req.params.id, JSON.stringify(list)]);
+    if (!upd.rowCount) throw new HttpError(404, 'not_found');
+    await audit(s, 'device_type.commands_changed', req.params.id, list);
+    return { body: { commands: list } };
+  });
+
+  r.get('/admin/api/automations', async (req) => {
+    await session(req);
+    return { body: { automations: (await q(
+      `SELECT a.*, o.name AS org_name, s.name AS site_name FROM automations a JOIN organisations o ON o.id = a.org_id LEFT JOIN sites s ON s.id = a.site_id ORDER BY a.created_at DESC`)).rows } };
+  });
+  r.post('/admin/api/automations', async (req) => {
+    const s = await session(req, 'admin');
+    const b = req.body ?? {};
+    if (!['gt', 'lt'].includes(b.op)) throw new HttpError(400, 'invalid_op');
+    const threshold = Number(b.threshold);
+    if (!Number.isFinite(threshold)) throw new HttpError(400, 'invalid_threshold');
+    const target = (await q(`SELECT d.org_id, t.commands FROM devices d JOIN device_types t ON t.id = d.type_id WHERE d.id = $1`, [str(b.targetDeviceId, 'targetDeviceId')])).rows[0];
+    if (!target) throw new HttpError(400, 'target_not_found');
+    const orgId = str(b.orgId, 'orgId');
+    if (target.org_id !== orgId) throw new HttpError(400, 'target_not_owned', 'The target device must belong to the same organisation');
+    const parseArgs = (x: unknown) => { if (!x) return {}; if (typeof x === 'object') return x; try { return JSON.parse(String(x)); } catch { throw new HttpError(400, 'invalid_args', 'Arguments must be JSON, e.g. {"channel":"fan1","on":true}'); } };
+    const args = parseArgs(b.args), clearArgs = parseArgs(b.clearArgs);
+    for (const [name, a] of [[str(b.command, 'command'), args], [optStr(b.clearCommand), clearArgs]] as [string | null, any][]) {
+      if (!name) continue;
+      const spec = findCommand(target.commands, name);
+      if (!spec) throw new HttpError(400, 'unknown_command', `Target device does not support ${name}`);
+      try { checkPolicy(spec, 'automation'); validateArgs(spec, a); } catch (e) { if (e instanceof CommandError) throw new HttpError(400, e.code, e.message); throw e; }
+    }
+    const row = (await q(
+      `INSERT INTO automations (org_id, name, site_id, source_device_id, channel, metric, op, threshold, duration_s, hysteresis, target_device_id, command, args, clear_command, clear_args, cooldown_s)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      [orgId, str(b.name, 'name'), optStr(b.siteId), optStr(b.sourceDeviceId), optStr(b.channel), str(b.metric, 'metric'), b.op, threshold,
+        Math.max(0, Number(b.durationS) || 0), Math.max(0, Number(b.hysteresis) || 0), b.targetDeviceId, b.command, JSON.stringify(args),
+        optStr(b.clearCommand), JSON.stringify(clearArgs), Math.max(0, Number(b.cooldownS ?? 300) || 0)])).rows[0];
+    d.actuators?.invalidate(orgId);
+    await audit(s, 'automation.created', row.id, b);
+    return { status: 201, body: { automation: row } };
+  });
+  r.post('/admin/api/automations/:id/toggle', async (req) => {
+    const s = await session(req, 'admin');
+    const row = (await q(`UPDATE automations SET enabled = NOT enabled WHERE id = $1 RETURNING enabled, org_id`, [req.params.id])).rows[0];
+    if (!row) throw new HttpError(404, 'not_found');
+    d.actuators?.invalidate(row.org_id);
+    await audit(s, 'automation.toggled', req.params.id, row);
+    return { body: row };
+  });
+
+  r.post('/admin/api/orgs/:id/retention', async (req) => {
+    const s = await session(req, 'admin');
+    const days = Number(req.body?.days);
+    if (!Number.isInteger(days) || days < 30 || days > 7300) throw new HttpError(400, 'invalid_days', 'Retention must be 30–7300 days');
+    const upd = await q(`UPDATE organisations SET retention_days = $2 WHERE id = $1`, [req.params.id, days]);
+    if (!upd.rowCount) throw new HttpError(404, 'not_found');
+    await audit(s, 'org.retention_changed', req.params.id, { days });
+    return { body: { ok: true, days } };
+  });
+
+  // ---------- Carbon ----------
+  if (d.carbon) {
+    const carbon = d.carbon;
+    const wrap = async <T>(fn: () => Promise<T>) => {
+      try { return await fn(); } catch (e) { if (e instanceof CarbonError) throw new HttpError(e.status, e.code, e.message); throw e; }
+    };
+    const date = (v: unknown) => { if (!v) return undefined; const t = new Date(String(v)); if (Number.isNaN(t.getTime())) throw new HttpError(400, 'invalid_date'); return t; };
+    r.get('/admin/api/carbon', async (req) => {
+      await session(req);
+      const projects = await carbon.listProjects(null);
+      return { body: { projects: await Promise.all(projects.map(async (p: any) => ({ ...p, summary: await carbon.summary(p.id) }))), kinds: MEASUREMENT_KINDS } };
+    });
+    r.post('/admin/api/carbon', async (req) => {
+      const s = await session(req, 'admin');
+      const b = req.body ?? {};
+      let params = {};
+      if (b.params) { try { params = typeof b.params === 'string' ? JSON.parse(b.params) : b.params; } catch { throw new HttpError(400, 'invalid_params', 'Parameters must be JSON'); } }
+      const p = await wrap(() => carbon.createProject({ orgId: str(b.orgId, 'orgId'), name: str(b.name, 'name'), methodology: str(b.methodology, 'methodology'), registry: optStr(b.registry), siteIds: Array.isArray(b.siteIds) ? b.siteIds : b.siteIds ? [b.siteIds] : [], params }));
+      await audit(s, 'carbon.project_created', p.id, b);
+      return { status: 201, body: { project: p } };
+    });
+    r.get('/admin/api/carbon/:id', async (req) => {
+      await session(req);
+      const p = await wrap(() => carbon.getProject(req.params.id));
+      return { body: { project: p, summary: await carbon.summary(p.id), activities: await carbon.listActivities(p.id), kinds: MEASUREMENT_KINDS } };
+    });
+    r.post('/admin/api/carbon/:id/params', async (req) => {
+      const s = await session(req, 'admin');
+      let params: Record<string, unknown>;
+      try { params = typeof req.body?.params === 'string' ? JSON.parse(req.body.params) : req.body?.params; } catch { throw new HttpError(400, 'invalid_params', 'Parameters must be JSON'); }
+      if (!params || typeof params !== 'object') throw new HttpError(400, 'invalid_params');
+      const p = await wrap(() => carbon.updateParams(req.params.id, params));
+      await audit(s, 'carbon.params_changed', req.params.id, params);
+      return { body: { project: p } };
+    });
+    r.post('/admin/api/carbon/:id/activities', async (req) => {
+      const s = await session(req);
+      const b = req.body ?? {};
+      const a = await wrap(() => carbon.openActivity({ projectId: req.params.id, siteId: optStr(b.siteId), deviceId: optStr(b.deviceId)?.toUpperCase() ?? null, reference: optStr(b.reference), startedAt: date(b.startedAt), endedAt: date(b.endedAt) ?? null, by: `user:${s.userId}` }));
+      await audit(s, 'carbon.activity_opened', a.id, b);
+      return { status: 201, body: { activity: a } };
+    });
+    r.get('/admin/api/carbon/activities/:id', async (req) => {
+      await session(req);
+      return { body: await wrap(() => carbon.getActivity(req.params.id)) };
+    });
+    r.post('/admin/api/carbon/activities/:id/close', async (req) => {
+      const s = await session(req);
+      const a = await wrap(() => carbon.closeActivity(req.params.id, date(req.body?.endedAt) ?? new Date()));
+      await audit(s, 'carbon.activity_closed', a.id);
+      return { body: { activity: a } };
+    });
+    r.post('/admin/api/carbon/activities/:id/measurements', async (req) => {
+      const s = await session(req);
+      const b = req.body ?? {};
+      const m = await wrap(() => carbon.addMeasurement({ activityId: req.params.id, kind: str(b.kind, 'kind'), value: Number(b.value), sampledAt: date(b.sampledAt) ?? null, documentRef: optStr(b.documentRef, 500), documentSha256: optStr(b.documentSha256, 64), note: optStr(b.note, 1000), supersedesId: optStr(b.supersedesId), by: `user:${s.userId}` }));
+      await audit(s, 'carbon.measurement_added', m.id, b);
+      return { status: 201, body: { measurement: m } };
+    });
+    r.post('/admin/api/carbon/activities/:id/calculate', async (req) => {
+      const s = await session(req);
+      const a = await wrap(() => carbon.calculate(req.params.id));
+      await audit(s, 'carbon.calculated', a.id, { status: a.result?.status, net: a.result?.netTco2e });
+      return { body: { activity: a } };
+    });
+    r.post('/admin/api/carbon/activities/:id/reject', async (req) => {
+      const s = await session(req, 'admin');
+      const a = await wrap(() => carbon.reject(req.params.id));
+      await audit(s, 'carbon.activity_rejected', a.id);
+      return { body: { activity: a } };
+    });
+  }
 }

@@ -3,6 +3,9 @@ import { buildConditionReport } from '../core/conditions.js';
 import { b64urlDecode, randomToken, safeEqual, sha256Hex, verifyEd25519, verifyHmacSha256 } from '../core/crypto.js';
 import { MESSAGE_KINDS, parseUplinkTopic, type MessageKind } from '../core/envelope.js';
 import type { Billing } from '../billing/billing.js';
+import { CommandError } from '../actuators/catalogue.js';
+import type { ActuatorService } from '../actuators/service.js';
+import { CarbonError, type CarbonService } from '../carbon/service.js';
 import type { DeviceService } from '../ingest/devices.js';
 import type { IngestPipeline } from '../ingest/pipeline.js';
 import type { EmailSender } from '../notify/providers.js';
@@ -20,6 +23,8 @@ export interface AppDeps {
   demoInbox: string;
   mqtt: { host: string; port: number };
   staticDir?: string;
+  actuators?: ActuatorService;
+  carbon?: CarbonService;
 }
 
 const INTERVALS = new Set(['raw', '1m', '1h', '1d']);
@@ -380,6 +385,101 @@ export function createApp(d: AppDeps): Router {
     await d.store.audit(`apikey:${key.id}`, key.orgId, 'grant.revoked', req.params.id);
     return { status: 204 };
   });
+
+  // ---------- Device control (owner organisation only) ----------
+  if (d.actuators) {
+    const act = d.actuators;
+    const ownDevice = async (key: ApiKey, id: string) => {
+      const dev = await d.store.getDevice(id);
+      if (!dev || dev.orgId !== key.orgId) throw new HttpError(404, 'device_not_found');
+      return dev;
+    };
+    r.get('/v1/devices/:id/commands', async (req) => {
+      const key = await apiKey(req, 'control:devices');
+      await ownDevice(key, req.params.id);
+      return { body: { available: await act.catalogue(req.params.id), history: await act.history(req.params.id) } };
+    });
+    r.post('/v1/devices/:id/commands', async (req) => {
+      const key = await apiKey(req, 'control:devices');
+      await ownDevice(key, req.params.id);
+      try {
+        const out = await act.send(req.params.id, String(req.body?.command ?? ''), req.body?.args ?? {}, { source: 'api', actor: `apikey:${key.id}`, orgId: key.orgId });
+        await d.store.audit(`apikey:${key.id}`, key.orgId, 'device.command', req.params.id, out);
+        return { status: 202, body: { command: { ...out, status: 'sent' } } };
+      } catch (e) {
+        if (e instanceof CommandError) throw new HttpError(e.code === 'not_allowed' ? 403 : 400, e.code, e.message);
+        throw e;
+      }
+    });
+  }
+
+  // ---------- Carbon (owners and organisations with access to a project site) ----------
+  if (d.carbon) {
+    const carbon = d.carbon;
+    const wrap = async <T>(fn: () => Promise<T>) => {
+      try { return await fn(); } catch (e) { if (e instanceof CarbonError) throw new HttpError(e.status, e.code, e.message); throw e; }
+    };
+    const visibleProject = async (key: ApiKey, id: string, write = false) => {
+      const p = await wrap(() => carbon.getProject(id));
+      if (p.org_id === key.orgId) return p;
+      if (write) throw new HttpError(403, 'forbidden', 'Only the project owner can change it');
+      const access = await resolveAccess(d.store, key.orgId);
+      if (!(p.site_ids ?? []).some((s: string) => access.has(s))) throw new HttpError(404, 'not_found');
+      return p;
+    };
+    r.get('/v1/carbon/projects', async (req) => {
+      const key = await apiKey(req, 'read:carbon');
+      const access = await resolveAccess(d.store, key.orgId);
+      const projects = await carbon.listProjects(key.orgId, [...access.keys()]);
+      return { body: { projects: await Promise.all(projects.map(async (p: any) => ({ ...p, summary: await carbon.summary(p.id) }))) } };
+    });
+    r.get('/v1/carbon/projects/:id', async (req) => {
+      const key = await apiKey(req, 'read:carbon');
+      const p = await visibleProject(key, req.params.id);
+      return { body: { project: p, summary: await carbon.summary(p.id), activities: await carbon.listActivities(p.id) } };
+    });
+    r.get('/v1/carbon/activities/:id', async (req) => {
+      const key = await apiKey(req, 'read:carbon');
+      const out = await wrap(() => carbon.getActivity(req.params.id));
+      await visibleProject(key, out.activity.project_id);
+      return { body: out };
+    });
+    r.post('/v1/carbon/projects/:id/activities', async (req) => {
+      const key = await apiKey(req, 'write:carbon');
+      const p = await visibleProject(key, req.params.id, true);
+      const b = req.body ?? {};
+      const a = await wrap(() => carbon.openActivity({
+        projectId: p.id, siteId: b.siteId ?? null, deviceId: b.deviceId ?? null, reference: b.reference ?? null,
+        startedAt: b.startedAt ? parseDate(b.startedAt, new Date()) : undefined, endedAt: b.endedAt ? parseDate(b.endedAt, new Date()) : null, by: `apikey:${key.id}`,
+      }));
+      return { status: 201, body: { activity: a } };
+    });
+    const ownActivity = async (key: ApiKey, id: string) => {
+      const out = await wrap(() => carbon.getActivity(id));
+      await visibleProject(key, out.activity.project_id, true);
+      return out.activity;
+    };
+    r.post('/v1/carbon/activities/:id/close', async (req) => {
+      const key = await apiKey(req, 'write:carbon');
+      await ownActivity(key, req.params.id);
+      return { body: { activity: await wrap(() => carbon.closeActivity(req.params.id, req.body?.endedAt ? parseDate(req.body.endedAt, new Date()) : new Date())) } };
+    });
+    r.post('/v1/carbon/activities/:id/measurements', async (req) => {
+      const key = await apiKey(req, 'write:carbon');
+      await ownActivity(key, req.params.id);
+      const b = req.body ?? {};
+      const m = await wrap(() => carbon.addMeasurement({
+        activityId: req.params.id, kind: String(b.kind ?? ''), value: Number(b.value), sampledAt: b.sampledAt ? parseDate(b.sampledAt, new Date()) : null,
+        documentRef: b.documentRef ?? null, documentSha256: b.documentSha256 ?? null, note: b.note ?? null, supersedesId: b.supersedesId ?? null, by: `apikey:${key.id}`,
+      }));
+      return { status: 201, body: { measurement: m } };
+    });
+    r.post('/v1/carbon/activities/:id/calculate', async (req) => {
+      const key = await apiKey(req, 'write:carbon');
+      await ownActivity(key, req.params.id);
+      return { body: { activity: await wrap(() => carbon.calculate(req.params.id)) } };
+    });
+  }
 
   return r;
 }

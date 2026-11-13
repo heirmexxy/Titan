@@ -167,7 +167,7 @@
 
   // ---------- layout ----------
   const NAV = [
-    ['overview', 'Overview'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'],
+    ['overview', 'Overview'], ['sites', 'Sites'], ['devices', 'Devices'], ['alerts', 'Alerts'], ['rules', 'Alert rules'], ['automations', 'Automations'], ['carbon', 'Carbon'],
     ['orgs', 'Organisations & keys'], ['frequency', 'Reporting frequency'], ['billing', 'Plans & usage'], ['demos', 'Demo requests'], ['settings', 'Settings'],
   ];
   let openAlerts = 0;
@@ -374,7 +374,7 @@
       <div class="grid2">
         <div class="panel"><h2>Latest readings</h2>${raw(latest.length ? `<table><thead><tr><th>Reading</th><th>Channel</th><th class="r">Value</th><th>When</th></tr></thead><tbody>${latest.map((r) => `<tr><td>${esc(label[r.metric]?.label ?? r.metric)}</td><td><code>${esc(r.channel)}</code></td><td class="r num">${fmt(r.value)} <span class="small muted">${esc(label[r.metric]?.unit ?? '')}</span>${r.quality !== 'ok' ? ` <span class="pill sev-warning">${esc(r.quality)}</span>` : ''}</td><td class="small">${esc(ago(r.time))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No readings yet.</p>')}</div>
         <div class="panel"><h2>Configuration ${raw(pendingCfg ? '<span class="pill pending">waiting for device</span>' : '')}</h2>
-          <p class="small muted">Blank intervals use the device-type default for ${dv.connectivity === 'gsm' ? 'GSM' : 'Wi-Fi'}: telemetry ${typeDef.telemetry_s ?? '?'}s, moisture ${typeDef.moisture_s ?? '?'}s, heartbeat ${typeDef.heartbeat_s ?? '?'}s.</p>
+          <p class="small muted">Blank intervals use the device-type default for ${dv.connectivity === 'gsm' ? 'GSM' : 'Wi-Fi'}: ${Object.entries(typeDef).map(([k, v]) => `${k.replace('_s', '')} ${v}s`).join(', ') || 'none set'}.</p>
           <form class="f" id="cfg-form">
             <label>Connection<select name="connectivity"><option value="wifi" ${dv.connectivity === 'wifi' ? 'selected' : ''}>Wi-Fi</option><option value="gsm" ${dv.connectivity === 'gsm' ? 'selected' : ''}>GSM</option></select></label>
             <label>Telemetry every (s)<input name="telemetry_s" inputmode="numeric" value="${iv('telemetry_s')}"></label>
@@ -388,9 +388,8 @@
             <p class="form-msg small" style="grid-column:1/-1"></p>
           </form>
           <h2 style="margin-top:1.2rem">Commands</h2>
-          <div class="row">
-            <button data-cmd="alarm_ack">Silence alarm</button><button data-cmd="send_state">Request status</button>
-            <button data-cmd="time_sync">Sync clock</button><button data-cmd="reboot" class="danger">Reboot</button>
+          <div id="cmds"><p class="empty">Loading…</p></div>
+          <div class="row" style="margin-top:.75rem">
             <button id="new-code">New provisioning code</button>
             ${raw(me.role === 'admin' ? `<button id="toggle-dev" class="danger">${dv.status === 'disabled' ? 'Enable device' : 'Disable device'}</button>` : '')}
           </div><div id="code-out"></div>
@@ -418,13 +417,37 @@
       toast('Config sent. It shows as applied once the device confirms.');
       route();
     });
-    onClick('[data-cmd]', async (d) => { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: d.cmd }); toast('Command sent'); });
+    loadCommands(id);
     onClick('#new-code', async () => {
       const out = await api('POST', `/devices/${encodeURIComponent(id)}/code`);
       app.querySelector('#code-out').innerHTML = h`<div class="secret">New provisioning code: <code>${out.provisioningCode}</code><br><span class="small">Valid ${out.expiresInDays} days. Use it to re-provision or rotate the device key.</span></div>`;
     });
     onClick('#toggle-dev', async () => { await api('POST', `/devices/${encodeURIComponent(id)}/status`, { disabled: dv.status !== 'disabled' }); route(); });
   };
+
+  async function loadCommands(id) {
+    const el = app.querySelector('#cmds');
+    const { available, history } = await api('GET', `/devices/${encodeURIComponent(id)}/commands`);
+    const mine = available.filter((c) => (c.allow || ['admin', 'ops']).includes(me.role));
+    const simple = mine.filter((c) => !Object.values(c.args).some((a) => !a.optional));
+    const withArgs = mine.filter((c) => Object.values(c.args).some((a) => !a.optional));
+    const input = (k, a) => a.type === 'boolean'
+      ? `<label>${esc(k)}<select name="${esc(k)}"><option value="true">on / true</option><option value="false">off / false</option></select></label>`
+      : `<label>${esc(k)}<input name="${esc(k)}" ${a.type === 'number' ? 'inputmode="decimal"' : ''} ${a.optional ? '' : 'required'}></label>`;
+    el.innerHTML = `<div class="row">${simple.map((c) => `<button data-cmd="${esc(c.name)}" ${c.name === 'reboot' ? 'class="danger"' : ''}>${esc(c.label)}</button>`).join('')}</div>
+      ${withArgs.map((c) => `<form class="f cmd-form" data-cmd="${esc(c.name)}" style="margin-top:.75rem"><div class="lbl" style="grid-column:1/-1"><b>${esc(c.label)}</b> <code>${esc(c.name)}</code></div>${Object.entries(c.args).map(([k, a]) => input(k, a)).join('')}<div><button type="submit">Send</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>`).join('')}
+      ${history.length ? `<h2 style="margin-top:1.2rem">Command log</h2><div class="scroll"><table><tbody>${history.map((h2) => `<tr><td><code>${esc(h2.name)}</code> <span class="small muted">${esc(JSON.stringify(h2.args) === '{}' ? '' : JSON.stringify(h2.args))}</span><div class="small muted">${esc(h2.actor)}</div></td><td><span class="pill ${h2.status === 'acked' ? 'st-online' : h2.status === 'failed' ? 'st-offline' : 'pending'}">${h2.status === 'acked' ? 'done' : esc(h2.status)}</span>${h2.result ? `<div class="small muted">${esc(h2.result)}</div>` : ''}</td><td class="small">${esc(ago(h2.sent_at))}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    el.querySelectorAll('button[data-cmd]').forEach((b) => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: b.dataset.cmd }); toast('Command sent'); loadCommands(id); } catch (e) { toast(e.message); } finally { b.disabled = false; }
+    }));
+    el.querySelectorAll('form.cmd-form').forEach((f) => f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = f.querySelector('.form-msg');
+      try { await api('POST', `/devices/${encodeURIComponent(id)}/command`, { cmd: f.dataset.cmd, args: formData(f) }); toast('Command sent'); loadCommands(id); }
+      catch (err) { msg.className = 'form-msg small err'; msg.textContent = err.message; }
+    }));
+  }
 
   // Line chart: one line per channel, crosshair tooltip, legend for 2+ channels.
   async function loadChart(id, metric, hours, meta) {
@@ -529,14 +552,15 @@
             <label>Organisation<select name="orgId" required>${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
             <label>Used by<input name="name" required placeholder="StorageX"></label>
             <fieldset style="grid-column:1/-1;border:0;padding:0;margin:0" class="row small">
-              ${['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants'].map((s, i) => `<label class="row" style="gap:.3rem"><input type="checkbox" name="scope_${i}" value="${s}" ${i < 2 ? 'checked' : ''} style="width:auto"> ${s}</label>`).join('')}
+              ${['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon'].map((s, i) => `<label class="row" style="gap:.3rem"><input type="checkbox" name="scope_${i}" value="${s}" ${i < 2 ? 'checked' : ''} style="width:auto"> ${s}</label>`).join('')}
             </fieldset>
             <div><button class="primary" type="submit">Create key</button></div><p class="form-msg small" style="grid-column:1/-1"></p>
           </form><div id="key-out"></div>` : '<p class="muted">Only admins can create keys.</p>')}</div>
       </div>
-      <div class="panel"><h2>Organisations</h2><div class="scroll"><table><thead><tr><th>Name</th><th>Type</th><th>Prefix</th><th class="r">Sites</th><th class="r">Devices</th><th>Plan</th><th>ID</th></tr></thead><tbody>
-        ${raw(orgs.map((o) => `<tr><td>${esc(o.name)}</td><td>${esc(o.kind)}</td><td>${esc(o.device_prefix ?? '')}</td><td class="r num">${o.sites}</td><td class="r num">${o.devices}</td><td>${esc(o.plan_id ?? '–')}</td><td><code class="small">${esc(o.id)}</code></td></tr>`).join(''))}
-      </tbody></table></div></div>
+      <div class="panel"><h2>Organisations</h2><div class="scroll"><table><thead><tr><th>Name</th><th>Type</th><th>Prefix</th><th class="r">Sites</th><th class="r">Devices</th><th>Plan</th><th class="r">Keeps data</th><th>ID</th></tr></thead><tbody>
+        ${raw(orgs.map((o) => `<tr><td>${esc(o.name)}</td><td>${esc(o.kind)}</td><td>${esc(o.device_prefix ?? '')}</td><td class="r num">${o.sites}</td><td class="r num">${o.devices}</td><td>${esc(o.plan_id ?? '–')}</td><td class="r num">${Math.round(Number(o.retention_days) / 365 * 10) / 10} yrs</td><td><code class="small">${esc(o.id)}</code></td></tr>`).join(''))}
+      </tbody></table></div>
+      ${raw(admin ? `<form class="f" id="ret-form" style="margin-top:1rem"><label>Organisation<select name="orgId">${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label><label>Keep readings for (days)<input name="days" inputmode="numeric" placeholder="730"></label><div><button type="submit">Save retention</button></div><p class="form-msg small" style="grid-column:1/-1">Carbon projects usually need the full crediting period, often 7–10 years (2555–3650 days).</p></form>` : '')}</div>
       <div class="panel"><h2>API keys</h2>${raw(keys.length ? `<div class="scroll"><table><thead><tr><th>Key</th><th>Organisation</th><th>Scopes</th><th>Last used</th><th></th></tr></thead><tbody>${keys.map((k) => `
         <tr><td><code>${esc(k.prefix)}…</code><div class="small muted">${esc(k.name)}</div></td><td>${esc(k.org_name)}</td><td class="small">${esc((Array.isArray(k.scopes) ? k.scopes : []).join(', '))}</td>
         <td class="small">${k.revoked_at ? '<span class="pill st-disabled">revoked</span>' : esc(ago(k.last_used_at))}</td>
@@ -549,6 +573,7 @@
       app.querySelector('#key-out').innerHTML = h`<div class="secret">Copy this key now. It won't be shown again.<br><code>${out.key}</code></div>`;
     });
     onClick('[data-revoke]', async (d) => { await api('POST', `/apikeys/${d.revoke}/revoke`); toast('Key revoked'); route(); });
+    bindForm('#ret-form', async (d) => { await api('POST', `/orgs/${d.orgId}/retention`, { days: Number(d.days) }); toast('Retention saved'); route(); });
   };
 
   views.frequency = async () => {
@@ -564,7 +589,12 @@
             <div class="lbl" style="grid-column:1/-1"><b>Wi-Fi</b></div>${['telemetry_s', 'moisture_s', 'heartbeat_s'].map((k) => field('wifi', k)).join('')}
             <div class="lbl" style="grid-column:1/-1"><b>GSM</b></div>${['telemetry_s', 'moisture_s', 'heartbeat_s'].map((k) => field('gsm', k)).join('')}
             ${admin ? '<div><button class="primary" type="submit">Save and send to devices</button></div>' : '<p class="muted small">Only admins can change frequencies.</p>'}
-            <p class="form-msg small" style="grid-column:1/-1"></p></form></div>`;
+            <p class="form-msg small" style="grid-column:1/-1"></p></form>
+          ${admin ? `<details style="margin-top:1rem"><summary>Commands this type accepts (${(t.commands || []).length})</summary>
+            <form class="cmd-cat" data-type="${esc(t.id)}" style="display:grid;gap:.5rem;margin-top:.5rem">
+              <textarea name="commands" rows="8" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:.85rem">${esc(JSON.stringify(t.commands || [], null, 2))}</textarea>
+              <p class="small muted">Each command: name, label, args (each with type string, number or boolean; optional min, max, optional) and allow (admin, ops, api, automation). Built-in commands are always available.</p>
+              <div><button type="submit">Save commands</button></div><p class="form-msg small"></p></form></details>` : ''}</div>`;
       }).join(''))}`);
     app.querySelectorAll('.freq-form').forEach((form) => form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -577,6 +607,161 @@
         msg.textContent = `Saved. Sent to ${out.pushedTo} device(s)${out.failed.length ? `; failed for ${out.failed.join(', ')}` : ''}.`;
       } catch (err) { msg.className = 'form-msg small err'; msg.textContent = err.message; }
     }));
+    app.querySelectorAll('form.cmd-cat').forEach((form) => form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = form.querySelector('.form-msg');
+      try {
+        const commands = JSON.parse(form.querySelector('textarea').value);
+        await api('POST', `/device-types/${form.dataset.type}/commands`, { commands });
+        msg.className = 'form-msg small ok'; msg.textContent = 'Saved.';
+      } catch (err) { msg.className = 'form-msg small err'; msg.textContent = err instanceof SyntaxError ? 'That is not valid JSON.' : err.message; }
+    }));
+  };
+
+  views.automations = async () => {
+    const [{ automations }, { orgs }, { sites }, { metrics }, { devices }] = await Promise.all([api('GET', '/automations'), api('GET', '/orgs'), api('GET', '/sites'), api('GET', '/metrics'), api('GET', '/devices')]);
+    const admin = me.role === 'admin';
+    layout('automations', h`<h1>Automations</h1>
+      <p class="muted">When a reading crosses a limit, Titan sends a command to a device, and optionally another command when it clears. Every command is logged on the target device.</p>
+      ${raw(admin ? `<div class="panel"><h2>Add an automation</h2><form class="f" id="auto-form">
+        <label>Name<input name="name" required placeholder="Dry bay 1"></label>
+        <label>Organisation<select name="orgId">${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
+        <label>Site<select name="siteId"><option value="">Any site</option>${sites.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label>
+        <label>When reading<select name="metric">${metrics.map((m) => `<option value="${esc(m.key)}" ${m.key === 'air.humidity' ? 'selected' : ''}>${esc(m.label)} (${esc(m.unit)})</option>`).join('')}</select></label>
+        <label>Is<select name="op"><option value="gt">above</option><option value="lt">below</option></select></label>
+        <label>Limit<input name="threshold" inputmode="decimal" required></label>
+        <label>For at least (minutes)<input name="minutes" inputmode="numeric" value="0"></label>
+        <label>Clear margin<input name="hysteresis" inputmode="decimal" value="0"></label>
+        <label>Only from channel<input name="channel" placeholder="optional, e.g. z1/dht22"></label>
+        <label>Send to device<select name="targetDeviceId">${devices.map((x) => `<option>${esc(x.id)}</option>`).join('')}</select></label>
+        <label>Command<input name="command" required placeholder="relay.set"></label>
+        <label>Arguments (JSON)<input name="args" placeholder='{"channel":"fan1","on":true}'></label>
+        <label>When it clears, send<input name="clearCommand" placeholder="optional, e.g. relay.set"></label>
+        <label>Clear arguments (JSON)<input name="clearArgs" placeholder='{"channel":"fan1","on":false}'></label>
+        <label>Wait between runs (minutes)<input name="cooldown" inputmode="numeric" value="5"></label>
+        <div><button class="primary" type="submit">Add automation</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>` : '')}
+      <div class="panel">${raw(automations.length ? `<div class="scroll"><table><thead><tr><th>Automation</th><th>Then</th><th>Last ran</th><th></th></tr></thead><tbody>${automations.map((a) => `
+        <tr><td><b>${esc(a.name)}</b><div class="small">${esc(a.metric)} ${a.op === 'gt' ? 'above' : 'below'} ${esc(a.threshold)}${Number(a.duration_s) ? ` for ${Math.round(a.duration_s / 60)} min` : ''}</div><div class="small muted">${esc(a.org_name)} · ${esc(a.site_name ?? 'any site')}</div></td>
+        <td class="small"><code>${esc(a.target_device_id)}</code> ${esc(a.command)} ${esc(JSON.stringify(a.args))}${a.clear_command ? `<br>clears: ${esc(a.clear_command)} ${esc(JSON.stringify(a.clear_args))}` : ''}</td>
+        <td class="small">${esc(ago(a.last_fired_at))}</td>
+        <td class="r">${admin ? `<button class="small" data-toggle-auto="${esc(a.id)}">${a.enabled === true ? 'Turn off' : 'Turn on'}</button>` : (a.enabled === true ? 'on' : 'off')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No automations yet.</p>')}</div>`);
+    bindForm('#auto-form', async (d) => { await api('POST', '/automations', { ...d, durationS: Number(d.minutes || 0) * 60, cooldownS: Number(d.cooldown || 0) * 60 }); toast('Automation added'); route(); });
+    onClick('[data-toggle-auto]', async (d) => { await api('POST', `/automations/${d.toggleAuto}/toggle`); route(); });
+  };
+
+  const tco2 = (x) => (x === null || x === undefined ? '–' : `${Number(x).toLocaleString(undefined, { maximumFractionDigits: 3 })} tCO₂e`);
+  const resultPill = (a) => {
+    if (a.status === 'open') return '<span class="pill pending">running</span>';
+    if (a.status === 'rejected') return '<span class="pill st-disabled">rejected</span>';
+    const st = a.result?.status;
+    if (!st) return '<span class="pill pending">not calculated</span>';
+    return st === 'ok' ? '<span class="pill st-online">calculated</span>' : st === 'incomplete' ? '<span class="pill pending">needs data</span>' : '<span class="pill st-offline">ineligible</span>';
+  };
+
+  views.carbon = async () => {
+    const [{ projects }, { orgs }, { sites }] = await Promise.all([api('GET', '/carbon'), api('GET', '/orgs'), api('GET', '/sites')]);
+    const admin = me.role === 'admin';
+    layout('carbon', h`<h1>Carbon</h1>
+      <p class="muted">Projects turn signed device readings and lab results into tonnes of CO₂e, with every input traceable. Calculations are Titan's estimators; align parameters with your registry methodology before issuing credits.</p>
+      ${raw(admin ? `<div class="panel"><h2>New project</h2><form class="f" id="proj-form">
+        <label>Name<input name="name" required placeholder="Oyo biochar"></label>
+        <label>Organisation<select name="orgId">${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
+        <label>Method<select name="methodology"><option value="biochar-v1">Biochar batches</option><option value="cookstove-v1">Cookstove usage</option></select></label>
+        <label>Registry<input name="registry" placeholder="e.g. Puro.earth"></label>
+        <label>Site<select name="siteIds">${sites.map((x) => `<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.org_name)})</option>`).join('')}</select></label>
+        <div><button class="primary" type="submit">Create project</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>` : '')}
+      <div class="panel">${raw(projects.length ? `<div class="scroll"><table><thead><tr><th>Project</th><th>Method</th><th class="r">Batches / periods</th><th class="r">Net removals or reductions</th></tr></thead><tbody>${projects.map((p) => `
+        <tr class="click" data-href="#project-${esc(p.id)}"><td>${esc(p.name)}<div class="small muted">${esc(p.org_name)}${p.registry ? ' · ' + esc(p.registry) : ''}</div></td><td>${p.methodology === 'biochar-v1' ? 'Biochar' : 'Cookstoves'}</td><td class="r num">${p.summary.calculated}/${p.summary.activities}</td><td class="r num">${esc(tco2(p.summary.netTco2e))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No carbon projects yet.</p>')}</div>`);
+    bindRowLinks();
+    bindForm('#proj-form', async (d) => { const { project } = await api('POST', '/carbon', { ...d, siteIds: [d.siteIds] }); location.hash = `#project-${project.id}`; });
+  };
+
+  views.project = async (id) => {
+    const { project: p, summary, activities } = await api('GET', `/carbon/${id}`);
+    const admin = me.role === 'admin';
+    const biochar = p.methodology === 'biochar-v1';
+    const hint = biochar
+      ? '{ "bufferPct": 10, "emissionsTco2ePerT": 0.2, "minHoldMinutes": 10, "maxHCorg": 0.7 }'
+      : '{ "baselineFuelKgPerHour": 1.5, "fuelSavingFraction": 0.5, "fNRB": 0.8, "efTco2PerTFuel": 1.75, "onC": 60, "offC": 45, "minMinutes": 10 }';
+    layout('carbon', h`<p class="small"><a href="#carbon">Carbon</a></p><h1>${p.name}</h1>
+      <div class="tiles">
+        <div class="tile"><div class="v">${tco2(summary.netTco2e)}</div><div class="l">Net, calculated ${biochar ? 'batches' : 'periods'}</div></div>
+        <div class="tile"><div class="v">${summary.calculated}/${summary.activities}</div><div class="l">Calculated</div></div>
+        <div class="tile"><div class="v">${summary.open}</div><div class="l">Running now</div></div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>${biochar ? 'Start a batch manually' : 'Add a reporting period'}</h2>
+          <p class="small muted">${biochar ? 'Kiln nodes start and end batches automatically with their batch buttons. Use this for kilns without a node.' : 'Usage is counted from every cookstove node on the project sites, or from one device.'}</p>
+          <form class="f" id="act-form">
+            <label>Reference<input name="reference" placeholder="${biochar ? 'Batch number' : 'e.g. 2026-11'}"></label>
+            <label>Device (optional)<input name="deviceId" placeholder="KN-000001"></label>
+            <label>Start<input name="startedAt" type="datetime-local" required></label>
+            <label>End${biochar ? ' (blank if running)' : ''}<input name="endedAt" type="datetime-local" ${biochar ? '' : 'required'}></label>
+            <div><button class="primary" type="submit">Add</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form></div>
+        <div class="panel"><h2>Parameters</h2>
+          <form id="param-form" style="display:grid;gap:.5rem"><textarea name="params" rows="6" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:.85rem" ${admin ? '' : 'disabled'}>${JSON.stringify(p.params || {}, null, 2)}</textarea>
+          <p class="small muted">Example: <code>${hint}</code></p>
+          ${raw(admin ? '<div><button type="submit">Save parameters</button></div>' : '')}<p class="form-msg small"></p></form></div>
+      </div>
+      <div class="panel"><h2>${biochar ? 'Batches' : 'Periods'}</h2>${raw(activities.length ? `<div class="scroll"><table><thead><tr><th>Reference</th><th>When</th><th>Status</th><th class="r">Net</th></tr></thead><tbody>${activities.map((a) => `
+        <tr class="click" data-href="#activity-${esc(a.id)}"><td>${esc(a.reference ?? a.id.slice(0, 8))}<div class="small muted">${esc(a.device_id ?? 'all devices')}</div></td><td class="small">${esc(when(a.started_at))}${a.ended_at ? ' → ' + esc(when(a.ended_at)) : ''}</td><td>${resultPill(a)}</td><td class="r num">${a.result?.status === 'ok' ? esc(tco2(a.result.netTco2e)) : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">Nothing recorded yet.</p>')}</div>`);
+    bindRowLinks();
+    bindForm('#act-form', async (d) => {
+      const iso = (v) => (v ? new Date(v).toISOString() : undefined);
+      const { activity } = await api('POST', `/carbon/${id}/activities`, { ...d, startedAt: iso(d.startedAt), endedAt: iso(d.endedAt) });
+      location.hash = `#activity-${activity.id}`;
+    });
+    bindForm('#param-form', async (d) => { JSON.parse(d.params); await api('POST', `/carbon/${id}/params`, { params: d.params }); toast('Parameters saved'); });
+  };
+
+  views.activity = async (id) => {
+    const { activity: a, measurements } = await api('GET', `/carbon/activities/${id}`);
+    const { project: p, kinds } = await api('GET', `/carbon/${a.project_id}`);
+    const r = a.result;
+    const kindOptions = Object.entries(kinds).filter(([, k]) => k.methodology === p.methodology).map(([key, k]) => `<option value="${esc(key)}">${esc(k.label)} (${esc(k.unit)})</option>`).join('');
+    const row = (label, v) => `<dt>${esc(label)}</dt><dd>${v}</dd>`;
+    layout('carbon', h`<p class="small"><a href="#carbon">Carbon</a> / <a href="#project-${p.id}">${p.name}</a></p>
+      <div class="row" style="justify-content:space-between"><h1 style="margin:0">${a.reference ?? 'Activity ' + a.id.slice(0, 8)}</h1>${raw(resultPill(a))}</div>
+      <p class="muted">${when(a.started_at)}${a.ended_at ? ' → ' + when(a.ended_at) : ' (running)'} · ${a.device_id ?? 'all devices on the project sites'}</p>
+      <div class="row" style="margin-bottom:1rem">
+        ${raw(a.status === 'open' ? '<button id="close-act" class="primary">End now</button>' : '')}
+        ${raw(a.status !== 'open' && a.status !== 'rejected' ? '<button id="calc-act" class="primary">Calculate</button>' : '')}
+        ${raw(me.role === 'admin' && a.status !== 'rejected' ? '<button id="reject-act" class="danger">Reject</button>' : '')}
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Result</h2>${raw(!r ? '<p class="empty">Not calculated yet.</p>' : `
+          ${r.missing?.length ? `<p class="err">Missing: ${esc(r.missing.join(', '))}</p>` : ''}${r.problems?.length ? `<p class="err">${esc(r.problems.join('; '))}</p>` : ''}
+          <dl class="kv">${r.status === 'ok' && p.methodology === 'biochar-v1' ? [
+            row('Net (after buffer)', `<b>${esc(tco2(r.netTco2e))}</b>`), row('Gross', esc(tco2(r.grossTco2e))), row('Project emissions', esc(tco2(r.emissionsTco2e))), row('Buffer', esc(tco2(r.bufferTco2e))),
+            row('Dry biochar', `${esc(r.dryBiocharT)} t`), row('Carbon', `${esc(r.carbonT)} t`), row('Permanence factor', esc(r.permanenceFactor)), row('Held temperature', `${esc(r.heldTempC)} °C`)].join('') : ''}
+          ${r.status === 'ok' && p.methodology === 'cookstove-v1' ? [row('Reductions', `<b>${esc(tco2(r.netTco2e))}</b>`), row('Fuel saved', `${esc(r.fuelSavedT)} t`)].join('') : ''}
+          ${p.methodology === 'cookstove-v1' ? [row('Stoves', `${esc(r.activeDevices)} used of ${esc(r.devices)}`), row('Cooking sessions', esc(r.sessions)), row('Cooking hours', esc(r.cookingHours))].join('') : ''}
+          ${row('Calculated', esc(when(r.calculatedAt)))}</dl>
+          <details style="margin-top:.75rem"><summary>Inputs and their sources</summary><pre style="white-space:pre-wrap;font-size:.8rem">${esc(JSON.stringify(r.inputs, null, 2))}</pre></details>`)}</div>
+        <div class="panel"><h2>Measurements and lab results</h2>
+          ${raw(measurements.length ? `<table><tbody>${measurements.map((m) => `<tr><td>${esc(kinds[m.kind]?.label ?? m.kind)}${m.supersedes_id ? ' <span class="small muted">(correction)</span>' : ''}<div class="small muted">${esc(m.document_ref ?? '')}${m.document_sha256 ? ' · sha256 ' + esc(String(m.document_sha256).slice(0, 12)) + '…' : ''}</div></td><td class="r num">${esc(m.value)} ${esc(m.unit)}</td><td class="small">${esc(when(m.created_at))}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">None yet.</p>')}
+          ${raw(a.status !== 'rejected' && kindOptions ? `<form class="f" id="meas-form" style="margin-top:1rem">
+            <label>What<select name="kind">${kindOptions}</select></label><label>Value<input name="value" inputmode="decimal" required></label>
+            <label>Lab certificate<input name="file" type="file" accept=".pdf,.jpg,.png"></label>
+            <label>Note<input name="note"></label>
+            <div><button type="submit">Add</button></div><p class="form-msg small" style="grid-column:1/-1">The certificate's fingerprint (SHA-256) is recorded, so anyone can later confirm the file wasn't changed. Keep the file itself with your project records.</p></form>` : '')}
+        </div>
+      </div>`);
+    onClick('#close-act', async () => { await api('POST', `/carbon/activities/${id}/close`, {}); route(); });
+    onClick('#calc-act', async () => { await api('POST', `/carbon/activities/${id}/calculate`); toast('Calculated'); route(); });
+    onClick('#reject-act', async () => { await api('POST', `/carbon/activities/${id}/reject`); route(); });
+    bindForm('#meas-form', async (d, form) => {
+      const file = form.querySelector('input[type=file]').files[0];
+      let documentSha256, documentRef;
+      if (file) {
+        const buf = await file.arrayBuffer();
+        documentSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map((b) => b.toString(16).padStart(2, '0')).join('');
+        documentRef = file.name;
+      }
+      await api('POST', `/carbon/activities/${id}/measurements`, { kind: d.kind, value: Number(d.value), note: d.note, documentRef, documentSha256 });
+      toast('Added. Calculate again to include it.');
+      route();
+    });
   };
 
   views.billing = async (_, params) => {
@@ -649,7 +834,7 @@
     if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
     const [path, qs] = (location.hash.slice(1) || 'overview').split('?');
     const params = new URLSearchParams(qs || '');
-    const m = /^(site|device)-(.+)$/.exec(path);
+    const m = /^(site|device|project|activity)-(.+)$/.exec(path);
     try {
       if (m) await views[m[1]](decodeURIComponent(m[2]), params);
       else await (views[path] || views.overview)(null, params);

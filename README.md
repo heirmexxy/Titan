@@ -9,7 +9,8 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 - [Device Protocol v1](docs/device-protocol-v1.md): for hardware engineers
 - [Product requirements](docs/PRD.md)
 - [Deployment](docs/deployment.md)
-- API docs: `web/docs/index.html`, served at `/docs/`
+- [Sensor node reference designs](docs/sensor-nodes.md)
+- Integration Guide and API docs: `web/docs/index.html`, served at `/docs/`
 
 ## What's built (v1, stage 1)
 
@@ -30,7 +31,13 @@ WareGuard (Kitovu's warehouse monitor) is the first device; StorageX is the firs
 | StorageX condition reports (`/v1/sites/:id/conditions`) and lookup by StorageX ID | Done |
 | API docs with StorageX guide (`/docs/`) | Done |
 | Admin/Ops dashboard (`/admin`): fleet, sites, devices, charts, config, commands, alerts, rules, contacts, keys, reporting frequency, plans, usage, team | Done |
+| Device commands: catalogue per device type, policies, command log with device confirmation (`/v1/devices/:id/commands`) | Done |
+| Automations: readings trigger commands on other devices, with clear commands and cooldown | Done |
+| Carbon module: projects, biochar batches (opened/closed by kiln nodes), cookstove periods, lab results with certificate fingerprints, `biochar-v1` and `cookstove-v1` calculations with full lineage | Done |
+| Data retention per organisation (30 days to 20 years) | Done |
+| Sensor node reference designs (`docs/sensor-nodes.md`) | Done |
 | Client console for outside organisations | Next |
+| MCP server for AI agents | Next |
 
 ## Develop
 

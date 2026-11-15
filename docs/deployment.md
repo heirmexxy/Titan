@@ -39,6 +39,10 @@ curl http://127.0.0.1:4600/healthz
 
 ## Step 4. Nginx + TLS
 
+**If Dokploy (Traefik) already uses ports 80/443 on the server**, skip Nginx: set `HOST=127.0.0.1,172.17.0.1` in `.env`, restart Titan, and copy `deploy/traefik-titan.yml` to `/etc/dokploy/traefik/dynamic/titan.yml`. Traefik issues the certificate itself.
+
+Otherwise:
+
 ```bash
 sudo cp deploy/nginx-titan.conf /etc/nginx/sites-available/titan
 sudo ln -s /etc/nginx/sites-available/titan /etc/nginx/sites-enabled/

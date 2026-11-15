@@ -1,0 +1,21 @@
+# For servers where Dokploy's Traefik already owns ports 80/443.
+# Copy to /etc/dokploy/traefik/dynamic/titan.yml (Traefik picks it up automatically).
+# Titan must listen on the Docker bridge IP too: HOST=127.0.0.1,172.17.0.1 in .env
+http:
+  routers:
+    titan-web:
+      rule: Host(`titan.kitovu.com.ng`)
+      entryPoints: [web]
+      middlewares: [redirect-to-https]
+      service: titan
+    titan:
+      rule: Host(`titan.kitovu.com.ng`)
+      entryPoints: [websecure]
+      service: titan
+      tls:
+        certResolver: letsencrypt
+  services:
+    titan:
+      loadBalancer:
+        servers:
+          - url: http://172.17.0.1:4600

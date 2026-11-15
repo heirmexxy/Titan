@@ -6,6 +6,8 @@ function env(name: string, fallback?: string): string {
 
 export const config = {
   port: Number(env('PORT', '4600')),
+  /** Addresses to listen on, comma-separated. Add the Docker bridge IP (e.g. 172.17.0.1) when a containerised proxy such as Traefik fronts Titan. */
+  hosts: env('HOST', '127.0.0.1').split(',').map((h) => h.trim()).filter(Boolean),
   publicUrl: env('PUBLIC_URL', 'https://titan.kitovu.com.ng'),
   databaseUrl: env('DATABASE_URL', 'postgres://titan@localhost:5432/titan'),
   /** Shared secret EMQX sends in X-Titan-Internal when calling auth/acl/message hooks. */

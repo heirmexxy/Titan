@@ -50,16 +50,21 @@ registerAgentAdmin(app, { pool: store.pool, agent, session: admin.session });
 registerAgentConsole(app, { pool: store.pool, who: consoleApi.who });
 registerMcp(app, { store, selfBaseUrl: () => `http://127.0.0.1:${config.port}` });
 
-const server = createServer(app.handler());
-server.keepAliveTimeout = 65_000; // longer than Nginx's upstream keepalive
-server.listen(config.port, '127.0.0.1', () => {
-  console.log(JSON.stringify({ level: 'info', msg: 'titan listening', port: config.port, staticDir }));
+const handler = app.handler();
+const servers = config.hosts.map((host) => {
+  const s = createServer(handler);
+  s.keepAliveTimeout = 65_000; // longer than the proxy's upstream keepalive
+  s.listen(config.port, host, () => {
+    console.log(JSON.stringify({ level: 'info', msg: 'titan listening', host, port: config.port, staticDir }));
+  });
+  return s;
 });
 const stopWorkers = startWorkers({ store, pipeline, dispatcher, billing, sweepSeconds: config.offlineSweepSeconds, pool: store.pool, agent });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     stopWorkers();
-    server.close(() => store.pool.end().then(() => process.exit(0)));
+    let open = servers.length;
+    for (const s of servers) s.close(() => { if (--open === 0) store.pool.end().then(() => process.exit(0)); });
   });
 }

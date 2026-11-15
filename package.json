@@ -11,8 +11,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/index.js",
-    "migrate": "tsx scripts/migrate.ts",
-    "cli": "tsx src/cli.ts",
+    "migrate": "node --env-file-if-exists=.env --import tsx scripts/migrate.ts",
+    "cli": "node --env-file-if-exists=.env --import tsx src/cli.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "docs": "node scripts/build-docs.mjs"

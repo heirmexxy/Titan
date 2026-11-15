@@ -24,13 +24,14 @@ Titan also runs on plain PostgreSQL (no Timescale), just with slower long-range 
 ## Step 3. Titan app
 
 ```bash
-sudo useradd -r -m -d /opt/titan titan
-sudo -u titan git clone https://github.com/heirmexxy/Titan /opt/titan
+sudo useradd -r -d /opt/titan -s /usr/sbin/nologin titan
+sudo git clone https://github.com/heirmexxy/Titan /opt/titan
 cd /opt/titan
-sudo -u titan cp .env.example .env    # then fill in the values
+sudo cp .env.example .env && sudo chmod 600 .env   # then fill in the values
+sudo chown -R titan:titan /opt/titan
 sudo -u titan npm install
 sudo -u titan npm run build
-sudo -u titan npm run migrate
+sudo -u titan bash -c 'set -a; . ./.env; set +a; npm run migrate'
 sudo cp deploy/titan.service /etc/systemd/system/
 sudo systemctl enable --now titan
 curl http://127.0.0.1:4600/healthz
@@ -75,7 +76,7 @@ In the SSL listener, point to `/etc/emqx/certs/fullchain.pem` and `/etc/emqx/cer
 ## Step 6. First admin account
 
 ```bash
-npm run cli -- user:create e.nwachinemere@kitovu.com.ng admin --name "Emeka"
+sudo -u titan bash -c 'set -a; . ./.env; set +a; npm run cli -- user:create e.nwachinemere@kitovu.com.ng admin --name "Emeka"'
 ```
 
 Sign in at `https://titan.kitovu.com.ng/admin` with the temporary password and change it under Settings. Everything below can also be done in the dashboard.

@@ -8,61 +8,51 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.88em;backgroun
 pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overflow-x:auto;font-size:.85rem}pre code{background:none;color:inherit;padding:0}</style></head>
 <body><nav aria-label="Docs"><b>Titan</b><a href="../index.html">Home</a><a href="index.html">Integration Guide</a><a href="device-protocol.html">Device protocol</a><a href="sensor-nodes.html">Sensor nodes</a></nav><main><h1>Titan Device Protocol v1</h1>
 <p><strong>Status:</strong> Draft for hardware review · <strong>Owner:</strong> Kitovu Technology Company Limited · <strong>Applies to:</strong> WareGuard and any third-party device connecting to Titan (<code>titan.kitovu.com.ng</code>)</p>
-<p>This document replaces Sections 3–8 of the <em>WareGuard Hardware-to-Cloud Communication Protocol Specification</em> (the earlier cloud version). Sensor acquisition, the LCD and offline local monitoring (Sections 1–2 of that document) are unchanged. Devices now talk to <strong>Titan&#39;s own MQTT broker</strong> instead of earlier cloud.</p>
+<p>This document defines how devices connect to Titan, sign their readings, and receive configuration and commands. Sensor acquisition, displays and offline local alarms are up to each device and are not covered here.</p>
 <hr>
-<h2>1. Summary of changes from the earlier spec</h2>
+<h2>1. At a glance</h2>
 <table>
 <thead>
 <tr>
 <th>Topic</th>
-<th>earlier spec</th>
 <th>Titan v1</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>Broker</td>
-<td><code>earlier-cloud.cloud:8883</code></td>
-<td><code>mqtt.titan.kitovu.com.ng:8883</code> (TLS 1.2+)</td>
+<td><code>mqtt.titan.kitovu.com.ng:8883</code> (TLS 1.2+), WebSocket fallback on 443</td>
 </tr>
 <tr>
-<td>Auth</td>
-<td>Shared username <code>device</code> + token</td>
-<td>Username = Device ID, password = device token</td>
+<td>Authentication</td>
+<td>Username = device ID, password = device token issued at provisioning</td>
 </tr>
 <tr>
 <td>Message integrity</td>
-<td>None</td>
-<td><strong>Every uplink message signed with the device&#39;s own Ed25519 key</strong></td>
+<td><strong>Every uplink message is signed with the device&#39;s own Ed25519 key</strong></td>
 </tr>
 <tr>
 <td>Topics</td>
-<td><code>ds/&lt;Datastream&gt;</code></td>
-<td><code>titan/v1/&lt;deviceId&gt;/up/&lt;kind&gt;</code></td>
+<td><code>titan/v1/&lt;deviceId&gt;/up/&lt;kind&gt;</code> and <code>titan/v1/&lt;deviceId&gt;/down/&lt;kind&gt;</code></td>
 </tr>
 <tr>
 <td>Payload</td>
-<td>One value per topic</td>
 <td>One signed envelope carrying many readings</td>
 </tr>
 <tr>
 <td>Metric names</td>
-<td><code>Temperature</code>, <code>Humidity</code>…</td>
-<td>Registry keys: <code>air.temperature</code>, <code>air.humidity</code>…</td>
+<td>Registry keys such as <code>air.temperature</code>, <code>air.humidity</code> (§5)</td>
 </tr>
 <tr>
-<td>Ordering / dedupe</td>
-<td>None</td>
+<td>Ordering and duplicates</td>
 <td>Monotonic sequence number <code>seq</code></td>
 </tr>
 <tr>
 <td>Moisture</td>
-<td>One calibrated value</td>
-<td>Raw value <strong>and</strong> calibrated value + calibration profile ID</td>
+<td>Raw value <strong>and</strong> calibrated value with its calibration profile ID</td>
 </tr>
 <tr>
-<td>Reporting interval</td>
-<td>Hard-coded</td>
-<td>Set by Titan admin, pushed to device (<code>down/config</code>)</td>
+<td>Reporting intervals</td>
+<td>Set in Titan and pushed to the device (<code>down/config</code>)</td>
 </tr>
 </tbody></table>
 <hr>

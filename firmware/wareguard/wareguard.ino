@@ -3,7 +3,7 @@
  *
  * STATUS: reference code, not yet compiled or tested on hardware. It shows exactly what Titan expects:
  * provisioning, Ed25519 signing, envelopes, topics, sequence numbers, offline buffering, config and commands.
- * Keep your existing sensor and LCD code; replace the cloud-connection parts with this.
+ * Keep your existing sensor and LCD code; use this for everything that talks to the cloud.
  *
  * Libraries (Arduino Library Manager unless noted):
  *   PubSubClient (Nick O'Leary) · ArduinoJson 7 · DHT sensor library (Adafruit)

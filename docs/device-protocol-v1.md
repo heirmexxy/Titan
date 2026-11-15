@@ -2,23 +2,23 @@
 
 **Status:** Draft for hardware review · **Owner:** Kitovu Technology Company Limited · **Applies to:** WareGuard and any third-party device connecting to Titan (`titan.kitovu.com.ng`)
 
-This document replaces Sections 3–8 of the *WareGuard Hardware-to-Cloud Communication Protocol Specification* (the earlier cloud version). Sensor acquisition, the LCD and offline local monitoring (Sections 1–2 of that document) are unchanged. Devices now talk to **Titan's own MQTT broker** instead of earlier cloud.
+This document defines how devices connect to Titan, sign their readings, and receive configuration and commands. Sensor acquisition, displays and offline local alarms are up to each device and are not covered here.
 
 ---
 
-## 1. Summary of changes from the earlier spec
+## 1. At a glance
 
-| Topic | earlier spec | Titan v1 |
-|---|---|---|
-| Broker | previous broker | `mqtt.titan.kitovu.com.ng:8883` (TLS 1.2+) |
-| Auth | Shared username `device` + token | Username = Device ID, password = device token |
-| Message integrity | None | **Every uplink message signed with the device's own Ed25519 key** |
-| Topics | `ds/<Datastream>` | `titan/v1/<deviceId>/up/<kind>` |
-| Payload | One value per topic | One signed envelope carrying many readings |
-| Metric names | `Temperature`, `Humidity`… | Registry keys: `air.temperature`, `air.humidity`… |
-| Ordering / dedupe | None | Monotonic sequence number `seq` |
-| Moisture | One calibrated value | Raw value **and** calibrated value + calibration profile ID |
-| Reporting interval | Hard-coded | Set by Titan admin, pushed to device (`down/config`) |
+| Topic | Titan v1 |
+|---|---|
+| Broker | `mqtt.titan.kitovu.com.ng:8883` (TLS 1.2+), WebSocket fallback on 443 |
+| Authentication | Username = device ID, password = device token issued at provisioning |
+| Message integrity | **Every uplink message is signed with the device's own Ed25519 key** |
+| Topics | `titan/v1/<deviceId>/up/<kind>` and `titan/v1/<deviceId>/down/<kind>` |
+| Payload | One signed envelope carrying many readings |
+| Metric names | Registry keys such as `air.temperature`, `air.humidity` (§5) |
+| Ordering and duplicates | Monotonic sequence number `seq` |
+| Moisture | Raw value **and** calibrated value with its calibration profile ID |
+| Reporting intervals | Set in Titan and pushed to the device (`down/config`) |
 
 ---
 

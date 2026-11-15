@@ -51,6 +51,10 @@ sudo certbot --nginx -d titan.kitovu.com.ng -d mqtt.titan.kitovu.com.ng
 
 ## Step 5. EMQX (MQTT broker)
 
+**Behind Dokploy's Traefik (the Kitovu server):** run `sudo bash deploy/emqx-install.sh` from `/opt/titan`. It installs EMQX 5.8.6 (Apache-2.0), routes MQTT-over-WebSocket through Traefik, copies Traefik's certificate for `mqtt.titan.kitovu.com.ng` into EMQX (refreshed daily), keeps the dashboard and plain MQTT local-only, wires authentication, authorization and rules to Titan, and saves an API key in `.env`. The dashboard admin password is in `/root/emqx-admin-password.txt`.
+
+Manual setup, for other servers:
+
 Install EMQX 5 (open-source) from the official `.deb` for your Ubuntu version and start it. Then in the EMQX dashboard (`http://SERVER:18083`, reachable only through an SSH tunnel; block 18083 in the firewall):
 
 1. **Listeners**: enable SSL on 8883 using the Let's Encrypt cert for `mqtt.titan.kitovu.com.ng` (`/etc/letsencrypt/live/.../fullchain.pem` and `privkey.pem`). Disable the plain 1883 listener on the public interface.

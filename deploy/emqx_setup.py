@@ -51,6 +51,11 @@ if pw == 'public':
     s, b = call('POST', '/users/admin/change_pwd', {'old_pwd': 'public', 'new_pwd': new})
     if step('dashboard password changed', s, b):
         open(PWFILE, 'w').write(new + '\n'); os.chmod(PWFILE, 0o600)
+        token = None  # changing the password revokes the session; sign in again
+        s, b = call('POST', '/login', {'username': 'admin', 'password': new})
+        if s != 200:
+            print('ERR login after password change'); sys.exit(1)
+        token = b['token']
 else:
     print('OK  dashboard password already set')
 

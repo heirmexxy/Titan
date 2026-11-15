@@ -28,7 +28,7 @@ sudo useradd -r -m -d /opt/titan titan
 sudo -u titan git clone https://github.com/heirmexxy/Titan /opt/titan
 cd /opt/titan
 sudo -u titan cp .env.example .env    # then fill in the values
-sudo -u titan npm ci
+sudo -u titan npm install
 sudo -u titan npm run build
 sudo -u titan npm run migrate
 sudo cp deploy/titan.service /etc/systemd/system/
@@ -55,7 +55,22 @@ Install EMQX 5 (open-source) from the official `.deb` for your Ubuntu version an
 5. **Rules → new rule** with SQL `SELECT event, username FROM "$events/client_disconnected"`, action `POST http://127.0.0.1:4600/internal/emqx/event`, same header.
 6. **API keys**: create one and put it in `.env` as `EMQX_API_KEY` / `EMQX_API_SECRET` (Titan uses it to publish configs and commands). Restart Titan.
 
-Renew hook: after certbot renews, reload EMQX so it picks up the new cert.
+EMQX can't read `/etc/letsencrypt` directly, so copy the certificate to EMQX and refresh it on every renewal:
+
+```bash
+sudo tee /etc/letsencrypt/renewal-hooks/deploy/emqx.sh >/dev/null <<'HOOK'
+#!/bin/sh
+mkdir -p /etc/emqx/certs
+cp /etc/letsencrypt/live/titan.kitovu.com.ng/fullchain.pem /etc/emqx/certs/fullchain.pem
+cp /etc/letsencrypt/live/titan.kitovu.com.ng/privkey.pem /etc/emqx/certs/privkey.pem
+chown -R emqx:emqx /etc/emqx/certs && chmod 600 /etc/emqx/certs/privkey.pem
+systemctl restart emqx
+HOOK
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/emqx.sh
+sudo /etc/letsencrypt/renewal-hooks/deploy/emqx.sh
+```
+
+In the SSL listener, point to `/etc/emqx/certs/fullchain.pem` and `/etc/emqx/certs/privkey.pem`.
 
 ## Step 6. First admin account
 

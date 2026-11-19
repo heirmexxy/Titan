@@ -20,7 +20,9 @@ export async function applyRetention(pool: Pool): Promise<number> {
   return deleted;
 }
 
-export function startWorkers(o: { store: Store; pipeline: IngestPipeline; dispatcher: Dispatcher; billing: Billing | null; sweepSeconds: number; pool?: Pool; agent?: OpsAgent }) {
+export interface ExtraJob { name: string; everyMs: number; run: () => Promise<unknown> }
+
+export function startWorkers(o: { store: Store; pipeline: IngestPipeline; dispatcher: Dispatcher; billing: Billing | null; sweepSeconds: number; pool?: Pool; agent?: OpsAgent; extra?: ExtraJob[] }) {
   const log = (msg: string, err: unknown) => console.error(JSON.stringify({ level: 'error', msg, err: String(err) }));
   let busy = { sweep: false, hooks: false };
 
@@ -71,5 +73,15 @@ export function startWorkers(o: { store: Store; pipeline: IngestPipeline; dispat
     }
   }, 3_600_000);
 
-  return () => { clearInterval(sweep); clearInterval(hooks); clearInterval(invoices); clearInterval(retention); clearInterval(incidents); clearInterval(health); };
+  // Feature jobs: firmware rollouts, PAYG locks, trials and card charges, heartbeat. Each skips a beat if still running.
+  const extra = (o.extra ?? []).map((j) => {
+    let running = false;
+    return setInterval(async () => {
+      if (running) return;
+      running = true;
+      try { await j.run(); } catch (e) { log(`${j.name} failed`, e); } finally { running = false; }
+    }, j.everyMs);
+  });
+
+  return () => { clearInterval(sweep); clearInterval(hooks); clearInterval(invoices); clearInterval(retention); clearInterval(incidents); clearInterval(health); extra.forEach(clearInterval); };
 }

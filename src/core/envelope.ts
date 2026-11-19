@@ -30,6 +30,8 @@ export interface Body {
   ev?: { code: string; ch?: string; sev?: 'info' | 'warning' | 'critical'; msg?: string };
   st?: Record<string, unknown>;
   ack?: { cfg?: number; id?: string; ok: boolean; msg?: string };
+  /** GradeGuard: marks a telemetry message as one quality test of a sample (Device Protocol v1 §16). */
+  qt?: { lot?: string; spec?: string; sample?: string; lat?: number; lng?: number };
 }
 
 export interface DeviceKeyRecord {

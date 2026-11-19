@@ -30,6 +30,8 @@ export interface PipelineHook {
   onReadings?(device: Device, rows: ReadingRow[], live: boolean): Promise<void>;
   onEvent?(device: Device, ev: NonNullable<Body['ev']>, time: Date): Promise<void>;
   onAck?(device: Device, ack: NonNullable<Body['ack']>, at: Date): Promise<void>;
+  /** Every accepted message (after readings are stored): firmware version reports, GradeGuard quality tests. */
+  onMessage?(device: Device, kind: MessageKind, body: Body, time: Date, rows: ReadingRow[]): Promise<void>;
 }
 
 export type IngestResult =
@@ -42,6 +44,8 @@ const SEVERITY = new Set(['info', 'warning', 'critical']);
 
 export class IngestPipeline {
   constructor(private store: Store, private notifier: Notifier, private hooks: PipelineHook[] = []) {}
+
+  addHook(h: PipelineHook) { this.hooks.push(h); }
 
   private async runHooks(fn: (h: PipelineHook) => Promise<void> | undefined) {
     for (const h of this.hooks) {
@@ -129,6 +133,7 @@ export class IngestPipeline {
     if (kind === 'ack' && body.ack) await this.runHooks((h) => h.onAck?.(device, body.ack!, receivedAt));
     if (kind === 'event' && body.ev) await this.runHooks((h) => h.onEvent?.(device, body.ev!, time));
     if (rows.length) await this.runHooks((h) => h.onReadings?.(device, rows.filter((r) => r.quality !== 'rejected'), !body.buf));
+    await this.runHooks((h) => h.onMessage?.(device, kind, body, time, rows));
 
     // Threshold rules run on live readings only; buffered history is stored but does not page anyone.
     if (!body.buf) alertsOpened += await this.evaluateRules(device, rows.filter((r) => r.quality !== 'rejected'), metrics);

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titan Verify</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #14213D; --ink-soft: #4A5875; --muted: #6B778F; --paper: #EEF2F0; --panel: #fff; --mist: #D5DEDA; --line: #E4EAE7; --grain: #E2B23A; --leaf: #2F7D5B; --leaf-bg: #DDEFE5; --alert: #C8462F; --alert-bg: #F6E3DE; --warn: #9A6A00; --warn-bg: #FBF0D5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Archivo', system-ui, sans-serif; background: var(--paper); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--grain); outline-offset: 2px; }
+  header { background: var(--ink); color: var(--paper); }
+  header .in { max-width: 1100px; margin: 0 auto; padding: .8rem 1.2rem; display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+  header .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 1.25rem; }
+  header .brand span { font-weight: 400; font-variation-settings: 'wdth' 100; color: #AFC0BA; font-size: .85rem; margin-left: .3rem; }
+  header nav { display: flex; gap: .3rem; flex: 1; }
+  header nav a { text-decoration: none; padding: .35rem .6rem; border-radius: 6px; color: #DCE6E2; }
+  header nav a[aria-current] { background: #2A3C66; color: #fff; }
+  header .who { font-size: .85rem; color: #AFC0BA; }
+  main { max-width: 1100px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
+  h1 { font-variation-settings: 'wdth' 120; font-weight: 800; font-size: 1.6rem; margin: 0 0 1rem; }
+  h2 { font-variation-settings: 'wdth' 112; font-weight: 700; font-size: 1.1rem; margin: 0 0 .75rem; }
+  .panel { background: var(--panel); border: 1px solid var(--mist); border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1.25rem; min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; } .grid2 > * { min-width: 0; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: .5rem .6rem .5rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .85rem; } td.r, th.r { text-align: right; } .scroll { overflow-x: auto; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: #F6F9F7; }
+  .pill { display: inline-flex; padding: .05rem .5rem; border-radius: 10px; font-size: .82rem; font-weight: 600; }
+  .ok-p { color: var(--leaf); background: var(--leaf-bg); } .bad-p { color: var(--alert); background: var(--alert-bg); } .warn-p { color: var(--warn); background: var(--warn-bg); } .dim-p { color: var(--muted); background: #EEF1F4; }
+  button, .btn { font: inherit; font-weight: 600; padding: .45rem .85rem; border-radius: 6px; border: 1px solid var(--ink); background: #fff; color: var(--ink); cursor: pointer; text-decoration: none; display: inline-block; }
+  button.primary { background: var(--ink); color: var(--paper); } button.small, .btn.small { padding: .2rem .55rem; font-size: .85rem; } button:disabled { opacity: .5; }
+  header button { background: transparent; color: #DCE6E2; border-color: #4A5B7A; }
+  form.f { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; align-items: end; }
+  label, .lbl { display: grid; gap: .25rem; font-size: .85rem; color: var(--ink-soft); }
+  input, select, textarea { font: inherit; padding: .45rem .55rem; border: 1px solid var(--mist); border-radius: 6px; background: #fff; color: var(--ink); width: 100%; min-width: 0; }
+  textarea { min-height: 90px; }
+  .muted { color: var(--muted); } .small { font-size: .85rem; } .err { color: var(--alert); } .okc { color: var(--leaf); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+  .tile { background: #fff; border: 1px solid var(--mist); border-radius: 10px; padding: .9rem 1rem; } .tile .v { font-size: 1.7rem; font-variation-settings: 'wdth' 70; font-weight: 600; } .tile .l { color: var(--muted); font-size: .88rem; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .86em; word-break: break-all; }
+  .secret { background: var(--warn-bg); border: 1px solid #E8D29A; padding: .75rem 1rem; border-radius: 8px; margin: .75rem 0; word-break: break-all; }
+  details { border-top: 1px solid var(--line); padding: .5rem 0; } summary { cursor: pointer; font-weight: 600; }
+  .login { max-width: 400px; margin: 10vh auto; } .login form { display: grid; gap: .8rem; } .login .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 2rem; }
+  #toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--ink); color: var(--paper); padding: .7rem 1rem; border-radius: 8px; display: none; max-width: 420px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status"></div>
+<script>
+(() => {
+  const app = document.getElementById('app');
+  let me = null;
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const when = (t) => (t ? new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '');
+  const t3 = (x) => Number(x || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  const toast = (m) => { const t = document.getElementById('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 4000); };
+  const pill = (s) => `<span class="pill ${{ positive: 'ok-p', closed: 'dim-p', ready: 'ok-p', open: 'bad-p', negative: 'bad-p', blocked: 'bad-p', qualified: 'warn-p', responded: 'warn-p', calculated: 'ok-p' }[s] || 'warn-p'}">${esc(String(s).replace(/_/g, ' '))}</span>`;
+  async function api(method, path, body) {
+    const res = await fetch('/verify/api' + path, { method, credentials: 'same-origin', headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(method !== 'GET' ? { 'X-Titan-Verify': '1' } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
+    if (res.status === 401 && path !== '/login') { me = null; login(); throw new Error('Signed out'); }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.message || j.error || `Request failed (${res.status})`);
+    return j;
+  }
+  const form = (sel, fn) => { const f = app.querySelector(sel); if (!f) return; f.addEventListener('submit', async (e) => { e.preventDefault(); const b = f.querySelector('[type=submit]'); const m = f.querySelector('.msg'); if (b) b.disabled = true; if (m) m.textContent = ''; try { await fn(Object.fromEntries(new FormData(f)), f); } catch (err) { if (m) { m.textContent = err.message; m.className = 'msg small err'; } else toast(err.message); } finally { if (b) b.disabled = false; } }); };
+
+  function shell(active, content) {
+    app.innerHTML = `<header><div class="in"><div class="brand">Titan<span>Verify · ${esc(me.organisation)}</span></div>
+      <nav><a href="#projects" ${active === 'projects' ? 'aria-current="page"' : ''}>Projects</a><a href="#keys" ${active === 'keys' ? 'aria-current="page"' : ''}>API keys</a></nav>
+      <span class="who">${esc(me.email)}</span><button class="small" id="out">Sign out</button></div></header><main>${content}</main>`;
+    app.querySelector('#out').onclick = async () => { await api('POST', '/logout'); me = null; login(); };
+  }
+  function login() {
+    app.innerHTML = `<div class="login panel"><div class="brand">Titan</div><p class="muted">Verifier sign-in. Access is granted per project by the project owner.</p>
+      <form id="lf"><label class="lbl">Email<input name="email" type="email" required autocomplete="username"></label><label class="lbl">Password<input name="password" type="password" required autocomplete="current-password"></label>
+      <button class="primary" type="submit">Sign in</button><p class="msg small"></p></form><p class="small"><a href="#forgot">Forgot your password?</a></p></div>`;
+    form('#lf', async (d) => { await api('POST', '/login', d); me = await api('GET', '/me'); route(); });
+  }
+  const pub = {
+    forgot() {
+      app.innerHTML = `<div class="login panel"><div class="brand">Titan</div><form id="ff"><label class="lbl">Email<input name="email" type="email" required></label><button class="primary" type="submit">Send reset link</button><p class="msg small"></p></form><p class="small"><a href="#">Back</a></p></div>`;
+      form('#ff', async (d, f) => { await fetch('/api/password/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) }); f.innerHTML = '<p class="okc">If that email has access, a link is on its way.</p>'; });
+    },
+    reset(p) {
+      app.innerHTML = `<div class="login panel"><div class="brand">Titan</div><p class="muted">Choose your password (at least 10 characters).</p><form id="rf"><label class="lbl">Password<input name="password" type="password" minlength="10" required autocomplete="new-password"></label><button class="primary" type="submit">Save and continue</button><p class="msg small"></p></form></div>`;
+      form('#rf', async (d) => {
+        const r = await fetch('/api/password/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: p.get('token'), password: d.password }) });
+        const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.message || 'That link has expired');
+        history.replaceState(null, '', location.pathname); toast('Password saved. Sign in now.'); login();
+      });
+    },
+  };
+
+  const views = {};
+  views.projects = async () => {
+    const { projects } = await api('GET', '/projects');
+    shell('projects', `<h1>Assigned projects</h1><div class="panel">${projects.length ? `<table><thead><tr><th>Project</th><th>Owner</th><th>Registry</th><th class="r">Calculated</th><th class="r">Open findings</th><th>Your last statement</th></tr></thead><tbody>${projects.map((p) => `<tr class="click" data-href="#project-${esc(p.id)}"><td><b>${esc(p.name)}</b><div class="small muted">${p.methodology === 'biochar-v1' ? 'Biochar' : 'Cookstoves'}</div></td><td>${esc(p.owner)}</td><td>${esc(p.registry ?? '–')}${p.registry_methodology ? `<div class="small muted">${esc(p.registry_methodology)}</div>` : ''}</td><td class="r">${esc(p.calculated)}</td><td class="r">${esc(p.open_findings)}</td><td class="small">${esc(when(p.last_statement) || '–')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No projects are assigned to you yet.</p>'}</div>`);
+    app.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => (location.hash = tr.dataset.href)));
+  };
+  views.project = async (id) => {
+    const { project: p, activities, evidence, findings, statements } = await api('GET', `/projects/${id}`);
+    const ev = evidence.activities;
+    shell('projects', `<p class="small"><a href="#projects">Projects</a></p><h1>${esc(p.name)}</h1>
+      <p class="muted">${esc(p.owner)} · ${p.methodology === 'biochar-v1' ? 'Biochar' : 'Cookstoves'}${p.registry ? ` · ${esc(p.registry)}` : ''}${p.registryMethodology ? ` · ${esc(p.registryMethodology)}` : ''}</p>
+      <div class="tiles"><div class="tile"><div class="v">${t3(evidence.totals.netTco2e)}</div><div class="l">tCO₂e calculated (${evidence.totals.activities} activities)</div></div>
+        <div class="tile"><div class="v">${ev.filter((a) => a.readiness?.status === 'ready').length}/${ev.length}</div><div class="l">Ready by Titan's checklist</div></div>
+        <div class="tile"><div class="v">${findings.filter((f) => f.status !== 'closed').length}</div><div class="l">Your open findings</div></div></div>
+      <div class="panel"><h2>Evidence</h2><p class="small muted">Fingerprint <code>${esc(evidence.sha256)}</code>. Each reading cites signed device messages: check any of them at <code>${esc(evidence.proofEndpoint)}</code>.</p>
+        ${ev.map((a) => `<details><summary>${esc(a.reference ?? a.id.slice(0, 8))} · ${t3(a.result?.netTco2e)} tCO₂e · ${pill(a.readiness?.status ?? 'unknown')}</summary>
+          <p class="small">${esc(when(a.startedAt))} → ${esc(when(a.endedAt))} · device ${esc(a.device ?? '–')}</p>
+          <table><tbody>${(a.readiness?.items ?? []).map((i) => `<tr><td>${i.ok ? '✓' : i.level === 'blocker' ? '✗' : '!'}</td><td>${esc(i.label)}${i.detail ? `<div class="small muted">${esc(i.detail)}</div>` : ''}</td></tr>`).join('')}</tbody></table>
+          ${a.measurements?.length ? `<h2 style="margin-top:.8rem;font-size:1rem">Measurements</h2><table><tbody>${a.measurements.map((m) => `<tr><td>${esc(m.kind)}</td><td>${esc(m.value)} ${esc(m.unit)}</td><td class="small">${esc(m.document_ref ?? '')}${m.document_sha256 ? `<div><code>${esc(m.document_sha256.slice(0, 16))}…</code></div>` : ''}</td></tr>`).join('')}</tbody></table>` : ''}
+          <details><summary class="small">Calculation inputs and lineage</summary><pre class="small" style="white-space:pre-wrap;overflow-x:auto">${esc(JSON.stringify(a.result, null, 2))}</pre></details></details>`).join('') || '<p class="muted">No calculated activities yet.</p>'}
+        <p style="margin-top:.8rem"><button class="small" id="dl">Download evidence (JSON)</button></p></div>
+      <div class="grid2"><div class="panel"><h2>Findings</h2>${findings.length ? findings.map((f) => `<div style="border-bottom:1px solid var(--line);padding:.5rem 0">${pill(f.status)} <b>${esc(f.kind.replace(/_/g, ' '))}</b>${f.activity_reference ? ` <span class="small muted">· ${esc(f.activity_reference)}</span>` : ''}<p style="margin:.3rem 0">${esc(f.text)}</p>${f.response ? `<p class="small"><b>Owner:</b> ${esc(f.response)}</p>` : ''}
+          ${f.status !== 'closed' ? `<button class="small" data-close="${esc(f.id)}">Close</button>` : `<button class="small" data-reopen="${esc(f.id)}">Reopen</button>`}</div>`).join('') : '<p class="muted">None raised.</p>'}
+        <form class="f" id="fin" style="margin-top:1rem"><label>Kind<select name="kind"><option value="clarification">Clarification request</option><option value="corrective_action">Corrective action request</option><option value="observation">Observation</option></select></label>
+          <label>Activity<select name="activityId"><option value="">Whole project</option>${activities.map((a) => `<option value="${esc(a.id)}">${esc(a.reference ?? a.id.slice(0, 8))}</option>`).join('')}</select></label>
+          <label style="grid-column:1/-1">Finding<textarea name="text" required></textarea></label><div><button class="primary" type="submit">Raise finding</button></div><p class="msg small" style="grid-column:1/-1"></p></form></div>
+        <div class="panel"><h2>Verification statement</h2>${statements.map((s) => `<p>${pill(s.opinion)} ${t3(s.verified_tco2e)} tCO₂e · ${esc(when(s.signed_at))}<br><span class="small muted">Evidence <code>${esc(s.package_sha256.slice(0, 16))}…</code></span></p>`).join('')}
+          <form id="st" style="display:grid;gap:.7rem"><fieldset style="border:0;padding:0"><legend class="small muted">Activities covered</legend>${activities.filter((a) => a.status === 'calculated').map((a) => `<label style="display:flex;gap:.5rem;align-items:center"><input type="checkbox" name="act" value="${esc(a.id)}" checked style="width:auto"> ${esc(a.reference ?? a.id.slice(0, 8))} · ${t3(a.net_tco2e)} tCO₂e</label>`).join('') || '<p class="muted small">Nothing calculated yet.</p>'}</fieldset>
+            <label>Opinion<select name="opinion"><option value="positive">Positive (reasonable assurance)</option><option value="qualified">Qualified</option><option value="negative">Negative</option></select></label>
+            <label>Verified tCO₂e<input name="verifiedTco2e" type="number" step="any" min="0" required></label>
+            <label>Statement<textarea name="statement" required placeholder="Scope, criteria, materiality, conclusion"></textarea></label>
+            <div><button class="primary" type="submit">Sign statement</button></div><p class="msg small">Your statement is tied to the evidence fingerprint at the moment you sign. If the owner changes the evidence later, it no longer matches.</p></form></div></div>`);
+    app.querySelector('#dl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(evidence, null, 2)], { type: 'application/json' })); a.download = `evidence-${p.name.replace(/\W+/g, '-')}.json`; a.click(); };
+    app.querySelectorAll('[data-close],[data-reopen]').forEach((b) => b.addEventListener('click', async () => { try { await api('POST', `/findings/${b.dataset.close || b.dataset.reopen}/${b.dataset.close ? 'close' : 'reopen'}`); route(); } catch (e) { toast(e.message); } }));
+    form('#fin', async (d) => { await api('POST', `/projects/${id}/findings`, { ...d, activityId: d.activityId || undefined }); toast('Finding raised; the owner is notified in Titan'); route(); });
+    form('#st', async (d, f) => {
+      const activityIds = [...f.querySelectorAll('input[name=act]:checked')].map((x) => x.value);
+      await api('POST', `/projects/${id}/statements`, { activityIds, opinion: d.opinion, verifiedTco2e: Number(d.verifiedTco2e), statement: d.statement });
+      toast('Statement signed'); route();
+    });
+  };
+  views.keys = async () => {
+    const { keys } = await api('GET', '/keys');
+    shell('keys', `<h1>API keys</h1><div class="panel"><p class="muted">Use a key from your own tools on <code>/v1/verification/projects</code>, <code>/v1/verification/projects/{id}</code>, findings and statements. Keys only see projects assigned to your organisation.</p>
+      <table><tbody>${keys.map((k) => `<tr><td>${esc(k.name)}<div class="small muted"><code>${esc(k.prefix)}…</code></div></td><td class="small">${k.revoked_at ? 'revoked' : k.last_used_at ? 'used ' + esc(when(k.last_used_at)) : 'never used'}</td><td class="r">${k.revoked_at ? '' : `<button class="small" data-rev="${esc(k.id)}">Revoke</button>`}</td></tr>`).join('') || '<tr><td class="muted">No keys yet.</td></tr>'}</tbody></table>
+      <form class="f" id="kf" style="margin-top:1rem"><label>Name<input name="name" required placeholder="Audit workbook"></label><div><button class="primary" type="submit">Create key</button></div><p class="msg small" style="grid-column:1/-1"></p></form><div id="kout"></div></div>`);
+    form('#kf', async (d) => { const out = await api('POST', '/keys', d); app.querySelector('#kout').innerHTML = `<div class="secret">Copy this key now; it is shown once:<br><code>${esc(out.key)}</code></div>`; });
+    app.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', async () => { await api('POST', `/keys/${b.dataset.rev}/revoke`); route(); }));
+  };
+
+  async function route() {
+    const [path, qs] = (location.hash.slice(1) || 'projects').split('?');
+    const params = new URLSearchParams(qs || '');
+    if (pub[path]) return pub[path](params);
+    if (!me) { try { me = await api('GET', '/me'); } catch { return login(); } }
+    const m = /^([a-z]+)-(.+)$/.exec(path);
+    try { if (m && views[m[1]]) await views[m[1]](decodeURIComponent(m[2]), params); else await (views[path] || views.projects)(null, params); } catch (e) { if (me) toast(e.message); }
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>

@@ -26,24 +26,24 @@ export class HttpError extends Error {
 }
 
 type Handler = (req: Req) => Promise<Res> | Res;
-interface Route { method: string; parts: string[]; handler: Handler }
+interface Route { method: string; parts: string[]; handler: Handler; maxBody: number }
 
 const MAX_BODY = 1_000_000;
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.md': 'text/markdown; charset=utf-8',
 };
 
 export class Router {
   private routes: Route[] = [];
   constructor(private staticDir?: string) {}
 
-  on(method: string, path: string, handler: Handler) {
-    this.routes.push({ method, parts: path.split('/').filter(Boolean), handler });
+  on(method: string, path: string, handler: Handler, opts: { maxBody?: number } = {}) {
+    this.routes.push({ method, parts: path.split('/').filter(Boolean), handler, maxBody: opts.maxBody ?? MAX_BODY });
     return this;
   }
   get(p: string, h: Handler) { return this.on('GET', p, h); }
-  post(p: string, h: Handler) { return this.on('POST', p, h); }
+  post(p: string, h: Handler, opts?: { maxBody?: number }) { return this.on('POST', p, h, opts); }
   delete(p: string, h: Handler) { return this.on('DELETE', p, h); }
 
   private match(method: string, path: string): { route: Route; params: Record<string, string> } | null {
@@ -72,7 +72,7 @@ export class Router {
           if (method === 'GET' && this.staticDir && this.serveStatic(url.pathname, res)) return;
           throw new HttpError(404, 'not_found');
         }
-        const rawBody = await readBody(req);
+        const rawBody = await readBody(req, found.route.maxBody);
         let body: any = undefined;
         if (rawBody.length && (req.headers['content-type'] ?? '').includes('json')) {
           try { body = JSON.parse(rawBody.toString('utf8')); } catch { throw new HttpError(400, 'invalid_json'); }
@@ -97,7 +97,7 @@ export class Router {
     try {
       let st = statSync(file);
       if (st.isDirectory()) { file = join(file, 'index.html'); st = statSync(file); }
-      res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream', 'Content-Length': st.size, 'Cache-Control': 'public, max-age=300' });
+      res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream', 'Content-Length': st.size, 'Cache-Control': /\.(html|webmanifest)$|sw\.js$/.test(file) ? 'no-cache' : 'public, max-age=300' });
       createReadStream(file).pipe(res);
       return true;
     } catch {
@@ -106,13 +106,13 @@ export class Router {
   }
 }
 
-function readBody(req: IncomingMessage): Promise<Buffer> {
+function readBody(req: IncomingMessage, max = MAX_BODY): Promise<Buffer> {
   return new Promise((resolveP, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY) { reject(new HttpError(413, 'payload_too_large')); req.destroy(); return; }
+      if (size > max) { reject(new HttpError(413, 'payload_too_large')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => resolveP(Buffer.concat(chunks)));
@@ -123,6 +123,11 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
 function send(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
   if (res.headersSent) return;
   if (body === undefined || body === null) { res.writeHead(status, headers); res.end(); return; }
+  if (Buffer.isBuffer(body)) {
+    res.writeHead(status, { 'Content-Type': 'application/octet-stream', 'Content-Length': String(body.length), ...headers });
+    res.end(body);
+    return;
+  }
   const isText = typeof body === 'string';
   const payload = isText ? body : JSON.stringify(body);
   res.writeHead(status, { 'Content-Type': isText ? 'text/plain; charset=utf-8' : 'application/json', ...headers });

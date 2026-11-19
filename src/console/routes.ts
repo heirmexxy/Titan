@@ -29,9 +29,9 @@ export interface ConsoleDeps {
 
 interface Who { userId: string; email: string; name: string | null; role: 'client_owner' | 'client_member'; orgId: string; orgName: string; devicePrefix: string | null; support: { email: string; reason: string | null; expiresAt: string } | null }
 
-const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon'];
+const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon', 'manage:firmware', 'manage:payg', 'read:quality', 'write:quality', 'export:data'];
 const SITE_KINDS = ['warehouse', 'aquaponics', 'hydroponics', 'greenhouse', 'cold_room', 'poultry', 'field', 'energy', 'other'];
-const CLIENT_DEVICE_TYPES = ['titan-controller-v1', 'paygo-appliance-v1', 'titan-kiln-v1', 'titan-cookstove-v1', 'titan-solar-v1', 'titan-lora-gateway-v1', 'wareguard-v1'];
+const CLIENT_DEVICE_TYPES = ['titan-controller-v1', 'paygo-appliance-v1', 'titan-kiln-v1', 'titan-cookstove-v1', 'titan-solar-v1', 'titan-lora-gateway-v1', 'wareguard-v1', 'gradeguard-v1'];
 
 const str = (v: unknown, name: string, max = 200): string => {
   if (typeof v !== 'string' || !v.trim()) throw new HttpError(400, 'invalid_request', `${name} is required`);
@@ -80,13 +80,14 @@ export function registerConsole(r: Router, d: ConsoleDeps): { who: (req: Req, ow
     const key = `${req.ip}|${email}`;
     const a = attempts.get(key);
     if (a && a.reset > Date.now() && a.n >= 8) throw new HttpError(429, 'rate_limited', 'Too many attempts. Try again in 15 minutes.');
-    const u = (await q(`SELECT id, password_hash, role, disabled_at FROM users WHERE lower(email) = $1`, [email])).rows[0];
+    const u = (await q(`SELECT id, password_hash, role, disabled_at, email_verified_at FROM users WHERE lower(email) = $1`, [email])).rows[0];
     const ok = !!u && !u.disabled_at && ['client_owner', 'client_member'].includes(u.role) && (await verifyPassword(str(req.body?.password, 'password', 500), u.password_hash));
     if (!ok) {
       attempts.set(key, { n: (a && a.reset > Date.now() ? a.n : 0) + 1, reset: Date.now() + 15 * 60_000 });
       throw new HttpError(401, 'invalid_login', 'Email or password is incorrect');
     }
     attempts.delete(key);
+    if (!u.email_verified_at) throw new HttpError(403, 'email_not_verified', 'Confirm your email first: open the link we sent you, or ask for a new one.');
     const token = randomToken(32);
     await q(`INSERT INTO sessions (id, user_id, expires_at, ip) VALUES ($1,$2, now() + make_interval(days => $3), $4)`, [sha256Hex(token), u.id, SESSION_DAYS, req.ip]);
     await q(`UPDATE users SET last_login_at = now() WHERE id = $1`, [u.id]);
@@ -188,6 +189,8 @@ export function registerConsole(r: Router, d: ConsoleDeps): { who: (req: Req, ow
     if (!CLIENT_DEVICE_TYPES.includes(typeId)) throw new HttpError(400, 'invalid_type');
     await ownSite(w, str(req.body?.siteId, 'siteId'));
     if ((await q(`SELECT 1 FROM devices WHERE id = $1`, [id])).rows.length) throw new HttpError(409, 'exists', `${id} is already registered`);
+    const lim = (await q(`SELECT p.device_limit, (SELECT count(*) FROM devices WHERE org_id = $1)::int AS n FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.org_id = $1`, [w.orgId])).rows[0];
+    if (lim?.device_limit != null && lim.n >= Number(lim.device_limit)) throw new HttpError(402, 'device_limit', `Your plan allows ${lim.device_limit} devices. Choose a bigger plan under Billing.`);
     await q(`INSERT INTO devices (id, org_id, site_id, type_id, connectivity, name) VALUES ($1,$2,$3,$4,$5,$6)`,
       [id, w.orgId, req.body.siteId, typeId, req.body?.connectivity === 'gsm' ? 'gsm' : 'wifi', optStr(req.body?.name)]);
     const code = await d.devices.issueProvisionCode(id);

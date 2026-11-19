@@ -18,6 +18,9 @@ import { Dispatcher } from './notify/dispatcher.js';
 import { ResendEmail, TermiiSms } from './notify/providers.js';
 import { PostgresStore } from './store/postgres.js';
 import { startWorkers } from './workers/workers.js';
+import { registerExtensions } from './extensions.js';
+import { createApiKeyAuth } from './http/apikey.js';
+import { PAYG_EVENTS } from './payg/payg.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const staticDir = resolve(here, here.includes('/dist/') ? '../../web' : '../web');
@@ -32,8 +35,11 @@ const pipeline = new IngestPipeline(store, dispatcher, [actuators, carbon]);
 const devices = new DeviceService(store, broker);
 const billing = config.paystack.secretKey ? new Billing(store.pool, config.paystack.secretKey) : null;
 
+const apiKey = createApiKeyAuth(store);
+const paystackHooks: ((ev: any) => Promise<void>)[] = [];
+const sms = new TermiiSms();
 const app = createApp({
-  store, pipeline, devices, email, billing,
+  store, pipeline, devices, email, billing, apiKey, paystackHooks, extraWebhookEvents: PAYG_EVENTS,
   internalSecret: config.internalSecret,
   publicUrl: config.publicUrl,
   demoInbox: config.resend.demoInbox,
@@ -49,6 +55,12 @@ const agent = new OpsAgent(store.pool, new Writer(), email, config.publicUrl);
 registerAgentAdmin(app, { pool: store.pool, agent, session: admin.session });
 registerAgentConsole(app, { pool: store.pool, who: consoleApi.who });
 registerMcp(app, { store, selfBaseUrl: () => `http://127.0.0.1:${config.port}` });
+const ext = registerExtensions({
+  app, pool: store.pool, store, pipeline, devices, actuators, notifier: dispatcher, email, sms, apiKey,
+  adminSession: admin.session, consoleWho: consoleApi.who, agent,
+  paystackSecret: config.paystack.secretKey, paystackHooks, publicUrl: config.publicUrl, secureCookies: config.publicUrl.startsWith('https'),
+  dataDir: config.dataDir, backupDir: config.backupDir, emqx: { apiUrl: config.emqx.apiUrl, key: config.emqx.apiKey, secret: config.emqx.apiSecret }, mqtt: config.mqtt,
+});
 
 const handler = app.handler();
 const servers = config.hosts.map((host) => {
@@ -59,7 +71,7 @@ const servers = config.hosts.map((host) => {
   });
   return s;
 });
-const stopWorkers = startWorkers({ store, pipeline, dispatcher, billing, sweepSeconds: config.offlineSweepSeconds, pool: store.pool, agent });
+const stopWorkers = startWorkers({ store, pipeline, dispatcher, billing, sweepSeconds: config.offlineSweepSeconds, pool: store.pool, agent, extra: ext.jobs });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {

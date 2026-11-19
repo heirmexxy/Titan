@@ -105,7 +105,7 @@
 <body>
 <div id="app"></div>
 <div id="toast" role="status"></div>
-
+<script src="/shared/ext.js"></script>
 <script>
 (() => {
   const app = document.getElementById('app');
@@ -191,7 +191,7 @@
         <label class="lbl">Password<input name="password" type="password" autocomplete="current-password" required></label>
         <button class="primary" type="submit">Sign in</button>
         <p class="form-msg small"></p>
-      </form></div>`;
+      </form><p class="small"><a href="#forgot">Forgot your password?</a></p></div>`;
     bindForm('#login-form', async (d) => { await api('POST', '/login', d); me = await api('GET', '/me'); route(); });
   }
 
@@ -935,17 +935,21 @@
 
   // ---------- router ----------
   async function route() {
-    if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
     const [path, qs] = (location.hash.slice(1) || 'overview').split('?');
     const params = new URLSearchParams(qs || '');
-    const m = /^(site|device|project|activity)-(.+)$/.exec(path);
+    if (views.public[path]) return views.public[path](params);
+    if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
+    const m = /^([a-z]+)-(.+)$/.exec(path);
     try {
-      if (m) await views[m[1]](decodeURIComponent(m[2]), params);
+      if (m && views[m[1]]) await views[m[1]](decodeURIComponent(m[2]), params);
       else await (views[path] || views.overview)(null, params);
     } catch (e) {
       if (me) toast(e.message);
     }
   }
+  views.public = {};
+  // Feature pages from /shared/ext.js (firmware, PAYG, quality, exports, verification, health).
+  if (window.TitanExt) window.TitanExt({ surface: 'admin', app, views, NAV, layout, h, raw, esc, api, bindForm, onClick, toast, options, pill, when, ago, fmt, formData, route, bindRowLinks, getMe: () => me, renderLogin });
   window.addEventListener('hashchange', route);
   route();
   setInterval(() => { if (me && (location.hash === '' || location.hash === '#overview')) route(); }, 30_000);

@@ -1,6 +1,6 @@
 /** Command catalogue, argument validation and policy checks. Pure functions. */
 
-export type Source = 'admin' | 'ops' | 'api' | 'automation';
+export type Source = 'admin' | 'ops' | 'api' | 'automation' | 'system';
 
 export interface ArgSpec {
   type: 'string' | 'number' | 'boolean';
@@ -24,6 +24,11 @@ export const SYSTEM_COMMANDS: CommandSpec[] = [
   { name: 'send_state', label: 'Request status', args: {}, allow: ['admin', 'ops', 'api', 'automation'] },
   { name: 'time_sync', label: 'Sync clock', args: { time: { type: 'number', optional: true } }, allow: ['admin', 'ops'] },
   { name: 'reboot', label: 'Reboot', args: {}, allow: ['admin', 'ops'] },
+  // Sent only by Titan's firmware rollouts (Device Protocol v1 §15); people start rollouts, not raw commands.
+  {
+    name: 'ota.update', label: 'Install firmware', allow: ['system'],
+    args: { version: { type: 'string' }, url: { type: 'string' }, size: { type: 'number', min: 1 }, sha256: { type: 'string' }, sig: { type: 'string' } },
+  },
 ];
 
 export class CommandError extends Error {

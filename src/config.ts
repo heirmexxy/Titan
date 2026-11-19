@@ -35,6 +35,9 @@ export const config = {
     secretKey: env('PAYSTACK_SECRET_KEY', ''),
   },
   offlineSweepSeconds: Number(env('OFFLINE_SWEEP_SECONDS', '30')),
+  /** Firmware binaries and Titan's firmware signing key (back this folder up). */
+  dataDir: env('DATA_DIR', '/opt/titan/data'),
+  backupDir: env('BACKUP_DIR', '/var/backups/titan'),
 };
 
 export type Config = typeof config;

@@ -105,6 +105,7 @@
 <body>
 <div id="app"></div>
 <div id="toast" role="status"></div>
+<script src="/shared/ext.js"></script>
 <script>
 
 (() => {
@@ -238,8 +239,22 @@
         <label class="lbl">Password<input name="password" type="password" autocomplete="current-password" required></label>
         <button class="primary" type="submit">Sign in</button>
         <p class="form-msg small"></p>
-      </form></div>`;
-    bindForm('#login-form', async (d) => { await api('POST', '/login', d); me = await api('GET', '/me'); route(); });
+      </form>
+      <p class="small"><a href="#forgot">Forgot your password?</a></p>
+      <p class="small">New to Titan? <a href="/signup/">Create an account</a></p></div>`;
+    bindForm('#login-form', async (d, form) => {
+      try { await api('POST', '/login', d); }
+      catch (e) {
+        if (/confirm your email/i.test(e.message)) {
+          form.querySelector('.form-msg').innerHTML = `${esc(e.message)} <button type="button" class="small" id="resend">Send a new link</button>`;
+          form.querySelector('#resend').onclick = async () => { await fetch('/api/signup/resend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: d.email }) }); toast('If that account needs confirming, a new link is on its way.'); };
+          return;
+        }
+        throw e;
+      }
+      me = await api('GET', '/me'); route();
+    });
+    if (/verify=expired/.test(location.hash)) toast('That confirmation link has expired or was already used. Sign in, or ask for a new link.');
   }
   const ownerOnly = (html) => (isOwner() ? html : '');
 
@@ -515,13 +530,17 @@
   };
 
   async function route() {
-    if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
     const [path, qs] = (location.hash.slice(1) || 'overview').split('?');
     const params = new URLSearchParams(qs || '');
-    const m = /^(site|device|project)-(.+)$/.exec(path);
-    try { if (m) await views[m[1]](decodeURIComponent(m[2]), params); else await (views[path] || views.overview)(null, params); }
+    if (views.public[path]) return views.public[path](params);
+    if (!me) { try { me = await api('GET', '/me'); } catch { return renderLogin(); } }
+    const m = /^([a-z]+)-(.+)$/.exec(path);
+    try { if (m && views[m[1]]) await views[m[1]](decodeURIComponent(m[2]), params); else await (views[path] || views.overview)(null, params); }
     catch (e) { if (me) toast(e.message); }
   }
+  views.public = {};
+  // Feature pages from /shared/ext.js (firmware, PAYG, quality, exports, verification, subscription).
+  if (window.TitanExt) window.TitanExt({ surface: 'console', app, views, NAV, layout, h, raw, esc, api, bindForm, onClick, toast, options, pill, when, ago, fmt, formData, route, bindRowLinks, getMe: () => me, isOwner, ownerOnly, renderLogin });
   window.addEventListener('hashchange', route);
   route();
 })();

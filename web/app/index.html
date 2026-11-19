@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Titan Field</title>
+<meta name="theme-color" content="#14213D">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="icon" href="/app/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/app/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root { --ink: #14213D; --ink-soft: #4A5875; --muted: #6B778F; --paper: #EEF2F0; --panel: #fff; --mist: #D5DEDA; --line: #E4EAE7; --grain: #E2B23A; --leaf: #2F7D5B; --leaf-bg: #DDEFE5; --alert: #C8462F; --alert-bg: #F6E3DE; --warn: #9A6A00; --warn-bg: #FBF0D5; --tab: 64px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--paper); color: var(--ink); font-size: 16px; line-height: 1.45; overscroll-behavior-y: contain; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--grain); outline-offset: 2px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--ink); color: var(--paper); padding: calc(env(safe-area-inset-top) + .7rem) 1rem .7rem; display: flex; align-items: center; gap: .6rem; }
+  header h1 { font-size: 1.1rem; margin: 0; flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .back { background: none; border: 0; color: var(--paper); font-size: 1.4rem; padding: 0 .3rem; line-height: 1; }
+  .sync { font-size: .78rem; padding: .15rem .5rem; border-radius: 10px; background: #2A3C66; white-space: nowrap; }
+  .sync.off { background: var(--warn); color: #fff; }
+  main { padding: 1rem 1rem calc(var(--tab) + env(safe-area-inset-bottom) + 1.2rem); max-width: 640px; margin: 0 auto; }
+  nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border-top: 1px solid var(--mist); padding-bottom: env(safe-area-inset-bottom); }
+  nav.tabs a { display: grid; justify-items: center; gap: 2px; padding: .5rem 0 .55rem; text-decoration: none; color: var(--muted); font-size: .72rem; font-weight: 600; min-height: var(--tab); }
+  nav.tabs a svg { width: 24px; height: 24px; }
+  nav.tabs a[aria-current="page"] { color: var(--ink); }
+  nav.tabs a .dot { position: absolute; margin-left: 18px; margin-top: -2px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--alert); color: #fff; font-size: .65rem; line-height: 16px; text-align: center; padding: 0 3px; }
+  .card { background: var(--panel); border: 1px solid var(--mist); border-radius: 14px; padding: 1rem; margin-bottom: .8rem; }
+  .list { background: var(--panel); border: 1px solid var(--mist); border-radius: 14px; margin-bottom: .8rem; overflow: hidden; }
+  .item { display: flex; align-items: center; gap: .8rem; padding: .85rem 1rem; border-top: 1px solid var(--line); text-decoration: none; min-height: 56px; }
+  .item:first-child { border-top: 0; }
+  .item .grow { flex: 1; min-width: 0; }
+  .item .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .s { font-size: .82rem; color: var(--muted); }
+  .chev { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; margin-bottom: .8rem; }
+  .tile { background: var(--panel); border: 1px solid var(--mist); border-radius: 14px; padding: .8rem .9rem; }
+  .tile .v { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .tile .l { font-size: .8rem; color: var(--muted); }
+  .tile.bad .v { color: var(--alert); }
+  h2 { font-size: .85rem; text-transform: none; color: var(--muted); font-weight: 600; margin: 1.1rem .2rem .45rem; }
+  .pill { display: inline-block; padding: .08rem .5rem; border-radius: 10px; font-size: .76rem; font-weight: 700; }
+  .on { color: var(--leaf); background: var(--leaf-bg); } .off { color: var(--alert); background: var(--alert-bg); } .wait { color: var(--warn); background: var(--warn-bg); } .dim { color: var(--muted); background: #EEF1F4; }
+  .readings { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .5rem; margin-top: .6rem; }
+  .reading { background: var(--paper); border-radius: 10px; padding: .55rem .65rem; }
+  .reading .v { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .reading .l { font-size: .74rem; color: var(--muted); }
+  form { display: grid; gap: .8rem; }
+  label { display: grid; gap: .3rem; font-size: .85rem; color: var(--ink-soft); font-weight: 600; }
+  input, select, textarea { font: inherit; font-size: 16px; padding: .75rem .8rem; border: 1px solid var(--mist); border-radius: 10px; background: #fff; color: var(--ink); width: 100%; min-width: 0; }
+  .row { display: flex; gap: .5rem; align-items: center; }
+  .row > * { flex: 1; }
+  button, .btn { font: inherit; font-weight: 700; padding: .8rem 1rem; border-radius: 10px; border: 1px solid var(--ink); background: #fff; color: var(--ink); min-height: 48px; text-decoration: none; text-align: center; }
+  button.primary { background: var(--ink); color: #fff; }
+  button.small { min-height: 36px; padding: .35rem .75rem; font-size: .85rem; }
+  button:disabled { opacity: .5; }
+  .muted { color: var(--muted); } .small { font-size: .85rem; } .err { color: var(--alert); } .ok { color: var(--leaf); }
+  .code { font-size: 2rem; font-weight: 800; letter-spacing: .12em; text-align: center; font-variant-numeric: tabular-nums; background: var(--warn-bg); border-radius: 12px; padding: .9rem; margin: .6rem 0; word-break: break-all; }
+  .result { border-radius: 14px; padding: 1rem; font-weight: 700; font-size: 1.1rem; }
+  .result.pass { background: var(--leaf-bg); color: var(--leaf); } .result.fail { background: var(--alert-bg); color: var(--alert); } .result.queued { background: var(--warn-bg); color: var(--warn); }
+  video { width: 100%; border-radius: 14px; background: #000; max-height: 50vh; object-fit: cover; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: #fff; border: 1px solid var(--mist); border-radius: 10px; padding: 3px; margin-bottom: .8rem; }
+  .seg a { text-align: center; padding: .55rem; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: .9rem; color: var(--muted); }
+  .seg a[aria-current] { background: var(--ink); color: #fff; }
+  .login { min-height: 100vh; display: grid; align-content: center; padding: 1.5rem; max-width: 420px; margin: 0 auto; }
+  .login .logo { width: 64px; height: 64px; margin-bottom: 1rem; }
+  #toast { position: fixed; left: 1rem; right: 1rem; bottom: calc(var(--tab) + env(safe-area-inset-bottom) + .8rem); background: var(--ink); color: #fff; padding: .8rem 1rem; border-radius: 12px; display: none; z-index: 10; text-align: center; }
+  .install { display: none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status"></div>
+<script>
+(() => {
+  const app = document.getElementById('app');
+  const $ = (s) => app.querySelector(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ago = (t) => { if (!t) return 'never'; const s = Math.round((Date.now() - new Date(t).getTime()) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : new Date(t).toLocaleDateString(); };
+  const toast = (m) => { const t = document.getElementById('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 3500); };
+  const fmt = (v) => { const n = Number(v); return !Number.isFinite(n) ? '–' : Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2); };
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  // Light local storage for the offline queue and cached lists. It can be unavailable (private mode), so every use is guarded.
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('titan.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem('titan.' + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+  };
+  let me = store.get('me', null);
+  let openAlerts = 0;
+
+  async function call(method, path, body) {
+    const res = await fetch(path, { method, credentials: 'same-origin', headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(method !== 'GET' ? { 'X-Titan-Admin': '1', 'X-Titan-Console': '1' } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
+    if (res.status === 401 && !path.endsWith('/login')) { me = null; store.set('me', null); renderLogin(); throw new Error('Please sign in again'); }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(j.message || j.error || `Request failed (${res.status})`); e.status = res.status; throw e; }
+    return j;
+  }
+  const api = (m, p, b) => call(m, (me?.api ?? '/console/api') + p, b);
+  const withOrg = (b) => (me?.mode === 'kitovu' ? { ...b, orgId: store.get('org', null)?.id } : b);
+  // Cached GET: fresh when online, last copy when offline.
+  async function cached(key, fn) {
+    try { const v = await fn(); store.set('cache.' + key, v); return v; }
+    catch (e) { const c = store.get('cache.' + key, null); if (c && (!navigator.onLine || e instanceof TypeError)) return c; throw e; }
+  }
+
+  // ---------- Offline queue ----------
+  const queue = { all: () => store.get('queue', []), save: (q) => store.set('queue', q) };
+  function enqueue(kind, path, body) { const q = queue.all(); q.push({ id: uid(), kind, path, body, at: new Date().toISOString() }); queue.save(q); renderSync(); }
+  let syncing = false;
+  async function flush() {
+    if (syncing || !navigator.onLine || !me) return;
+    syncing = true;
+    try {
+      let q = queue.all();
+      for (const job of q.slice()) {
+        try { await api('POST', job.path, job.body); q = q.filter((x) => x.id !== job.id); queue.save(q); }
+        catch (e) { if (e instanceof TypeError) break; if (e.status && e.status < 500) { q = q.filter((x) => x.id !== job.id); queue.save(q); toast(`Not saved: ${e.message}`); } else break; }
+      }
+    } finally { syncing = false; renderSync(); }
+  }
+  window.addEventListener('online', () => { renderSync(); flush(); });
+  window.addEventListener('offline', renderSync);
+  setInterval(flush, 30_000);
+  function renderSync() {
+    const el = document.getElementById('sync'); if (!el) return;
+    const n = queue.all().length;
+    el.className = 'sync' + (!navigator.onLine || n ? ' off' : '');
+    el.textContent = !navigator.onLine ? `Offline${n ? ` · ${n} waiting` : ''}` : n ? `${n} to send` : 'Synced';
+  }
+
+  // ---------- Layout ----------
+  const ICONS = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>',
+    alerts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 17V11a6 6 0 1112 0v6l2 2H4z"/><path d="M10 21h4"/></svg>',
+    test: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/><path d="M7.5 15h9"/></svg>',
+    install: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 7V5a1 1 0 011-1h2M17 4h2a1 1 0 011 1v2M20 17v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2"/><path d="M8 12h8"/></svg>',
+  };
+  function layout(tab, title, content, back) {
+    app.innerHTML = `<header>${back ? `<button class="back" aria-label="Back" onclick="history.back()">‹</button>` : ''}<h1>${esc(title)}</h1><span id="sync" class="sync"></span></header>
+      <main>${content}</main>
+      <nav class="tabs" aria-label="Sections">${[['home', 'Sites'], ['alerts', 'Alerts'], ['test', 'Quality'], ['install', 'Install']].map(([k, l]) => `<a href="#${k}" ${k === tab ? 'aria-current="page"' : ''}>${ICONS[k]}${k === 'alerts' && openAlerts ? `<span class="dot">${openAlerts}</span>` : ''}<span>${l}</span></a>`).join('')}</nav>`;
+    renderSync();
+  }
+  const pill = (s) => `<span class="pill ${{ online: 'on', pass: 'on', offline: 'off', fail: 'off', critical: 'off', registered: 'wait', warning: 'wait', open: 'off', acknowledged: 'dim', stored: 'on', dispatched: 'dim' }[s] || 'dim'}">${esc(s === 'registered' ? 'awaiting setup' : s)}</span>`;
+
+  function renderLogin() {
+    app.innerHTML = `<div class="login"><img class="logo" src="/app/icon.svg" alt=""><h1 style="margin:0 0 .3rem">Titan Field</h1><p class="muted" style="margin-top:0">Sign in with your Titan account.</p>
+      <form id="lf"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Sign in</button><p class="small err" id="lmsg"></p></form><p class="small muted">Forgot it? Reset it at <a href="/console/#forgot">titan.kitovu.com.ng/console</a>.</p></div>`;
+    $('#lf').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try { await call('POST', '/app/api/login', Object.fromEntries(new FormData(e.target))); me = await call('GET', '/app/api/me'); store.set('me', me); location.hash = '#home'; route(); }
+      catch (err) { $('#lmsg').textContent = err.message; }
+    });
+  }
+
+  // ---------- Views ----------
+  const views = {};
+  views.home = async () => {
+    const { counts, sites } = await cached('home', () => call('GET', '/app/api/home'));
+    openAlerts = counts.open_alerts;
+    const orgPick = me.mode === 'kitovu' ? `<div class="card small">Recording quality data for <b>${esc(store.get('org', null)?.name ?? 'no organisation chosen')}</b> · <a href="#org">change</a></div>` : '';
+    layout('home', me.organisation || 'Titan', `${orgPick}
+      <div class="tiles"><div class="tile"><div class="v">${counts.online}</div><div class="l">Devices online</div></div><div class="tile ${counts.offline ? 'bad' : ''}"><div class="v">${counts.offline}</div><div class="l">Offline</div></div>
+        <div class="tile ${counts.open_alerts ? 'bad' : ''}"><div class="v">${counts.open_alerts}</div><div class="l">Open alerts</div></div><div class="tile"><div class="v">${counts.tests_week}</div><div class="l">Tests this week</div></div></div>
+      <h2>Sites</h2><div class="list">${sites.map((s) => `<a class="item" href="#site-${esc(s.id)}"><div class="grow"><div class="t">${esc(s.name)}</div><div class="s">${me.mode === 'kitovu' ? esc(s.org_name) + ' · ' : ''}${s.online}/${s.devices} online</div></div>${s.open_alerts ? `<span class="pill off">${s.open_alerts}</span>` : ''}<span class="chev">›</span></a>`).join('') || '<div class="item muted">No sites yet.</div>'}</div>
+      <button class="btn install" id="inst" style="width:100%">Install Titan on this phone</button>
+      <p class="small muted" style="text-align:center">${esc(me.email)} · <a href="#" id="out">Sign out</a></p>`);
+    $('#out').onclick = async (e) => { e.preventDefault(); await call('POST', '/app/api/logout').catch(() => {}); me = null; store.set('me', null); renderLogin(); };
+    if (deferredInstall) { $('#inst').style.display = 'block'; $('#inst').onclick = async () => { deferredInstall.prompt(); deferredInstall = null; $('#inst').style.display = 'none'; }; }
+  };
+  views.site = async (id) => {
+    const d = await cached('site.' + id, () => call('GET', `/app/api/sites/${id}`));
+    const byDev = {};
+    for (const r of d.latest) (byDev[r.device_id] ??= []).push(r);
+    layout('home', d.site.name, `${d.alerts.length ? `<h2>Alerts</h2><div class="list">${d.alerts.map((a) => `<div class="item"><div class="grow"><div class="t">${esc(a.title)}</div><div class="s">${esc(a.device_id ?? '')} · ${esc(ago(a.opened_at))}</div></div>${a.status === 'open' ? `<button class="small" data-ack="${esc(a.id)}">Ack</button>` : pill(a.status)}</div>`).join('')}</div>` : ''}
+      <h2>Devices</h2>${d.devices.map((dv) => `<div class="card"><div class="row" style="justify-content:space-between"><div><b>${esc(dv.name || dv.id)}</b><div class="small muted">${esc(dv.id)} · ${esc(dv.type_id)} · ${esc(ago(dv.last_seen_at))}</div></div><div style="flex:0">${pill(dv.status)}</div></div>
+        ${(byDev[dv.id] ?? []).length ? `<div class="readings">${byDev[dv.id].slice(0, 12).map((r) => `<div class="reading"><div class="v">${fmt(r.value)}<span class="small muted"> ${esc(r.unit ?? '')}</span></div><div class="l">${esc(r.label ?? r.metric)}${r.channel && r.channel !== 'main' ? ` · ${esc(r.channel)}` : ''}</div></div>`).join('')}</div>` : '<p class="small muted" style="margin:.5rem 0 0">No recent readings.</p>'}</div>`).join('') || '<p class="muted">No devices on this site.</p>'}
+      ${d.stacks.filter((s) => s.stack).length ? `<h2>Stacks</h2><div class="list">${d.stacks.filter((s) => s.stack).map((s) => `<div class="item"><div class="grow"><div class="t">${esc(s.zone)}/${esc(s.stack)}</div><div class="s">${esc(s.commodity ?? '')}</div></div></div>`).join('')}</div>` : ''}`, true);
+    bindAck();
+  };
+  views.alerts = async () => {
+    const { alerts } = await cached('alerts', () => call('GET', '/app/api/alerts'));
+    openAlerts = alerts.filter((a) => a.status === 'open').length;
+    layout('alerts', 'Alerts', `<div class="list">${alerts.map((a) => `<div class="item"><div class="grow"><div class="t">${esc(a.title)}</div><div class="s">${pill(a.severity)} ${esc(a.site_name ?? '')} · ${esc(a.device_id ?? '')} · ${esc(ago(a.opened_at))}</div></div>${a.status === 'open' ? `<button class="small" data-ack="${esc(a.id)}">Ack</button>` : pill(a.status)}</div>`).join('') || '<div class="item muted">Nothing needs attention.</div>'}</div>`);
+    bindAck();
+  };
+  function bindAck() {
+    app.querySelectorAll('[data-ack]').forEach((b) => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await call('POST', `/app/api/alerts/${b.dataset.ack}/ack`); toast('Acknowledged'); route(); } catch (e) { toast(e.message); b.disabled = false; }
+    }));
+  }
+
+  // QR / barcode scanning with the camera where the browser supports it; typing always works.
+  async function scanInto(input) {
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) { toast('Scanning is not supported in this browser. Type the code instead.'); input.focus(); return; }
+    const box = document.createElement('div');
+    box.innerHTML = '<video playsinline muted></video><button type="button" class="small" style="width:100%;margin-top:.4rem">Cancel</button>';
+    input.closest('form').prepend(box);
+    const video = box.querySelector('video');
+    let stream;
+    const stop = () => { stream?.getTracks().forEach((t) => t.stop()); box.remove(); };
+    box.querySelector('button').onclick = stop;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = stream; await video.play();
+      const det = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39', 'data_matrix'] });
+      const tick = async () => {
+        if (!box.isConnected) return;
+        const found = await det.detect(video).catch(() => []);
+        if (found[0]) { const v = found[0].rawValue.trim(); input.value = v.includes('/') ? v.split('/').pop() : v; input.dispatchEvent(new Event('change')); navigator.vibrate?.(60); stop(); return; }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    } catch { toast('Camera not available'); stop(); }
+  }
+  const gps = () => new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition((p) => resolve({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6) }), () => resolve(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+  });
+
+  views.install = async () => {
+    const { sites } = await cached('home', () => call('GET', '/app/api/home'));
+    if (me.mode === 'client' && me.role !== 'client_owner') return layout('install', 'Install a device', '<div class="card">Only account owners can install devices. Ask your owner to do it, or to make you an owner.</div>');
+    layout('install', 'Install a device', `<div class="card"><form id="if">
+      <label>Device ID (on the label)<div class="row"><input name="id" required placeholder="${esc(me.devicePrefix ? me.devicePrefix + '-000001' : 'WG-000001')}" autocapitalize="characters"><button type="button" id="scan" style="flex:0 0 auto">Scan</button></div></label>
+      <label>Site<select name="siteId" required>${sites.map((s) => `<option value="${esc(s.id)}">${esc(me.mode === 'kitovu' ? `${s.org_name} · ${s.name}` : s.name)}</option>`).join('')}</select></label>
+      <label>Type<select name="typeId"><option value="wareguard-v1">WareGuard</option><option value="gradeguard-v1">GradeGuard</option><option value="titan-controller-v1">Controller</option><option value="paygo-appliance-v1">PAYG appliance</option><option value="titan-kiln-v1">Kiln node</option><option value="titan-cookstove-v1">Cookstove node</option><option value="titan-solar-v1">Solar node</option><option value="titan-lora-gateway-v1">LoRa gateway</option></select></label>
+      <label>Connection<select name="connectivity"><option value="wifi">Wi-Fi</option><option value="gsm">GSM</option></select></label>
+      <label>Name (optional)<input name="name" placeholder="Bay 2 north"></label>
+      <button class="primary" type="submit">Get setup code</button><p class="small err" id="imsg"></p></form></div><div id="iout"></div>`);
+    $('#scan').onclick = () => scanInto($('#if [name=id]'));
+    $('#if').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!navigator.onLine) { $('#imsg').textContent = 'You need a connection to get a setup code.'; return; }
+      try {
+        const out = await call('POST', '/app/api/devices/install', Object.fromEntries(new FormData(e.target)));
+        $('#iout').innerHTML = `<div class="card"><p style="margin:0"><b>${esc(out.id)}</b> ${out.reinstall ? 'moved to' : 'added to'} ${esc(out.site)}. Enter this code on the device:</p><div class="code">${esc(out.provisioningCode)}</div><p class="small muted">Valid for ${out.expiresInDays} days, once. The device appears online as soon as it connects.</p><button class="small" id="copy">Copy code</button></div>`;
+        $('#copy').onclick = () => navigator.clipboard?.writeText(out.provisioningCode).then(() => toast('Copied'));
+        $('#iout').scrollIntoView({ behavior: 'smooth' });
+      } catch (err) { $('#imsg').textContent = err.message; }
+    });
+  };
+
+  // ---------- Quality (GradeGuard) ----------
+  const DEFAULT_PARAMS = [{ key: 'moisture', label: 'Moisture', unit: '%' }, { key: 'foreign_matter', label: 'Foreign matter', unit: '%' }, { key: 'broken', label: 'Broken grains', unit: '%' }];
+  function evaluateLocal(params, results) {
+    const failures = [];
+    for (const p of params) { const v = results[p.key]; if (v === undefined) failures.push(`${p.label} not measured`); else if (p.max != null && v > p.max) failures.push(`${p.label} above ${p.max}`); else if (p.min != null && v < p.min) failures.push(`${p.label} below ${p.min}`); }
+    return failures;
+  }
+  views.test = async (_, params) => {
+    if (me.mode === 'kitovu' && !store.get('org', null)) return views.org();
+    const seg = `<div class="seg"><a href="#test" ${params.get('lots') ? '' : 'aria-current="page"'}>New test</a><a href="#test?lots=1" ${params.get('lots') ? 'aria-current="page"' : ''}>Lots</a></div>`;
+    if (params.get('lots')) return lotsView(seg);
+    const { specs } = await cached('specs', () => api('GET', '/quality/specs'));
+    const pending = queue.all().filter((j) => j.kind === 'test').length;
+    layout('test', 'Quality test', `${seg}<div class="card"><form id="tf">
+      <label>Buyer spec<select name="specId" id="spec"><option value="">No spec (just record)</option>${specs.map((s) => `<option value="${esc(s.id)}">${esc(s.name)} · ${esc(s.commodity)}</option>`).join('')}</select></label>
+      <label>Lot code<div class="row"><input name="lot" placeholder="optional" autocapitalize="characters"><button type="button" id="scanlot" style="flex:0 0 auto">Scan</button></div></label>
+      <label id="commodity-l">Commodity<input name="commodity" placeholder="rice, maize, sesame…"></label>
+      <div id="fields" style="display:grid;gap:.8rem;grid-template-columns:1fr 1fr"></div>
+      <label>Sample (optional)<input name="sampleRef" placeholder="bag 14"></label>
+      <label style="display:flex;gap:.5rem;align-items:center;font-weight:500"><input type="checkbox" name="gps" checked style="width:auto"> Record location</label>
+      <button class="primary" type="submit">Save test</button></form></div><div id="tout"></div>
+      ${pending ? `<p class="small muted" style="text-align:center">${pending} test${pending > 1 ? 's' : ''} waiting to send.</p>` : ''}`);
+    const render = () => {
+      const s = specs.find((x) => x.id === $('#spec').value);
+      $('#commodity-l').style.display = s ? 'none' : '';
+      $('#fields').innerHTML = (s ? s.parameters : DEFAULT_PARAMS).map((p) => `<label>${esc(p.label)} <span class="muted" style="font-weight:400">${esc(p.unit)}${p.max != null ? ` · max ${esc(p.max)}` : ''}${p.min != null ? ` · min ${esc(p.min)}` : ''}</span><input name="r_${esc(p.key)}" type="number" step="any" inputmode="decimal"></label>`).join('');
+    };
+    $('#spec').addEventListener('change', render); render();
+    $('#scanlot').onclick = () => scanInto($('#tf [name=lot]'));
+    $('#tf').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target));
+      const results = Object.fromEntries(Object.entries(d).filter(([k, v]) => k.startsWith('r_') && v !== '').map(([k, v]) => [k.slice(2), Number(v)]));
+      if (!Object.keys(results).length) return toast('Enter at least one result');
+      const spec = specs.find((x) => x.id === d.specId);
+      if (!spec && !d.lot && !d.commodity) return toast('Choose a spec, a lot or a commodity');
+      const loc = d.gps ? await gps() : null;
+      const body = withOrg({ specId: d.specId || undefined, lot: d.lot || undefined, commodity: d.commodity || undefined, sampleRef: d.sampleRef || undefined, results, testedAt: new Date().toISOString(), clientRef: `app-${uid()}`, ...(loc ?? {}) });
+      const failures = spec ? evaluateLocal(spec.parameters, results) : [];
+      const show = (cls, text) => { $('#tout').innerHTML = `<div class="result ${cls}">${text}</div>`; $('#tout').scrollIntoView({ behavior: 'smooth' }); };
+      try {
+        if (!navigator.onLine) throw new TypeError('offline');
+        const { test } = await api('POST', '/quality/tests', body);
+        show(test.outcome === 'fail' ? 'fail' : 'pass', test.outcome === 'pass' ? '✓ Passes the spec' : test.outcome === 'fail' ? `✗ Fails: ${test.failures.map((f) => `${f.key.replace(/_/g, ' ')} ${f.reason}`).join(', ')}` : 'Saved');
+      } catch (err) {
+        if (!(err instanceof TypeError)) return toast(err.message);
+        enqueue('test', '/quality/tests', body);
+        show(failures.length ? 'fail' : 'queued', `${spec ? (failures.length ? `✗ Fails: ${failures.join(', ')}` : '✓ Passes the spec') : 'Saved'}<div class="small" style="font-weight:500;margin-top:.3rem">Offline: it will send when you're back online.</div>`);
+      }
+      navigator.vibrate?.(failures.length ? [80, 60, 80] : 60);
+      e.target.querySelectorAll('[name^=r_], [name=sampleRef]').forEach((i) => (i.value = ''));
+    });
+  };
+
+  async function lotsView(seg) {
+    layout('test', 'Lots', `${seg}<div class="card"><form id="lf2"><label>Find a lot<div class="row"><input name="code" placeholder="Lot code" autocapitalize="characters" required><button type="button" id="scan2" style="flex:0 0 auto">Scan</button></div></label><button type="submit">Open</button></form></div>
+      <h2>New lot</h2><div class="card"><form id="nl"><label>Code (blank = generate)<input name="code" autocapitalize="characters"></label><label>Commodity<input name="commodity" required></label>
+        <div class="row"><label>Quantity (kg)<input name="quantity" type="number" step="any" inputmode="decimal"></label><label>Harvested<input name="harvestedOn" type="date"></label></div>
+        <label>Origin (farmer or cluster)<input name="origin"></label><label style="display:flex;gap:.5rem;align-items:center;font-weight:500"><input type="checkbox" name="gps" checked style="width:auto"> Record location</label>
+        <button class="primary" type="submit">Create lot</button></form></div>`);
+    $('#scan2').onclick = () => scanInto($('#lf2 [name=code]'));
+    $('#lf2').addEventListener('submit', (e) => { e.preventDefault(); location.hash = `#lot-${encodeURIComponent(new FormData(e.target).get('code').trim().toUpperCase())}`; });
+    $('#nl').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target));
+      const loc = d.gps ? await gps() : null;
+      const code = (d.code || '').trim().toUpperCase() || `LOT-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const body = withOrg({ code, commodity: d.commodity, quantity: d.quantity || undefined, origin: d.origin || undefined, harvestedOn: d.harvestedOn || undefined, clientRef: `app-${uid()}`, ...(loc ?? {}) });
+      try { if (!navigator.onLine) throw new TypeError('offline'); await api('POST', '/lots', body); toast(`Lot ${code} created`); location.hash = `#lot-${encodeURIComponent(code)}`; }
+      catch (err) { if (!(err instanceof TypeError)) return toast(err.message); enqueue('lot', '/lots', body); toast(`Lot ${code} saved offline; write the code on the tag`); }
+    });
+  }
+  views.lot = async (code) => {
+    let d;
+    try { d = await cached('lot.' + code, () => api('GET', `/lots/${encodeURIComponent(code)}`)); }
+    catch (e) { return layout('test', code, `<div class="card">${esc(e.message)}</div>`, true); }
+    const { lot, events, tests, storage } = d;
+    layout('test', `Lot ${lot.code}`, `<div class="tiles"><div class="tile"><div class="v" style="font-size:1.2rem">${esc(lot.commodity)}</div><div class="l">${lot.quantity != null ? `${Number(lot.quantity).toLocaleString()} ${esc(lot.unit)}` : 'quantity not set'}</div></div>
+        <div class="tile"><div class="v" style="font-size:1.2rem">${pill(lot.status)}</div><div class="l">${esc(lot.site_name ?? 'location not set')}</div></div></div>
+      ${tests[0] ? `<div class="result ${tests[0].outcome === 'fail' ? 'fail' : 'pass'}">${tests[0].outcome === 'pass' ? '✓ Last test passed' : tests[0].outcome === 'fail' ? '✗ Last test failed' : 'Tested'} <span class="small" style="font-weight:500">${esc(ago(tests[0].tested_at))}</span></div>` : ''}
+      <h2>Record a step</h2><div class="card"><form id="ev"><div class="row"><label>Step<select name="kind"><option value="received">Received</option><option value="stored">Stored</option><option value="moved">Moved</option><option value="aggregated">Aggregated</option><option value="dispatched">Dispatched</option><option value="delivered">Delivered</option><option value="note">Note</option></select></label>
+        <label>Quantity (kg)<input name="quantity" type="number" step="any" inputmode="decimal"></label></div><label>Who / where<input name="counterparty" placeholder="buyer, truck, store"></label><label>Note<input name="note"></label>
+        <button class="primary" type="submit">Save step</button></form></div>
+      <h2>History</h2><div class="list">${events.slice().reverse().map((e) => `<div class="item"><div class="grow"><div class="t">${esc(e.kind)}</div><div class="s">${esc(ago(e.at))}${[e.site_name, e.counterparty, e.note].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}</div></div></div>`).join('')}</div>
+      ${storage.length ? `<h2>Storage</h2>${storage.map((s) => `<div class="card"><b>${esc(s.siteName)}</b><div class="readings">${s.conditions.map((c) => `<div class="reading"><div class="v">${fmt(c.avg)}</div><div class="l">${esc(c.metric)} avg (${fmt(c.min)}–${fmt(c.max)})</div></div>`).join('')}</div></div>`).join('')}` : ''}`, true);
+    $('#ev').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      const loc = await gps();
+      const body = { kind: f.kind, quantity: f.quantity || undefined, counterparty: f.counterparty || undefined, note: f.note || undefined, at: new Date().toISOString(), clientRef: `app-${uid()}`, ...(loc ?? {}) };
+      try { if (!navigator.onLine) throw new TypeError('offline'); await api('POST', `/lots/${encodeURIComponent(lot.code)}/events`, body); toast('Saved'); route(); }
+      catch (err) { if (!(err instanceof TypeError)) return toast(err.message); enqueue('event', `/lots/${encodeURIComponent(lot.code)}/events`, body); toast('Saved offline; it will send later'); e.target.reset(); }
+    });
+  };
+  views.org = async () => {
+    const { orgs } = await cached('orgs', () => call('GET', '/admin/api/orgs'));
+    layout('test', 'Choose organisation', `<p class="muted">Kitovu staff: quality tests and lots are recorded for this organisation.</p><div class="list">${orgs.filter((o) => o.kind !== 'verifier').map((o) => `<a class="item" href="#" data-org="${esc(o.id)}" data-name="${esc(o.name)}"><div class="grow"><div class="t">${esc(o.name)}</div></div><span class="chev">›</span></a>`).join('')}</div>`, true);
+    app.querySelectorAll('[data-org]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); store.set('org', { id: a.dataset.org, name: a.dataset.name }); location.hash = '#test'; }));
+  };
+
+  async function route() {
+    if (!me) { try { me = await call('GET', '/app/api/me'); store.set('me', me); } catch (e) { if (!navigator.onLine && store.get('me', null)) me = store.get('me', null); else return renderLogin(); } }
+    const [path, qs] = (location.hash.slice(1) || 'home').split('?');
+    const params = new URLSearchParams(qs || '');
+    const m = /^([a-z]+)-(.+)$/.exec(path);
+    try { if (m && views[m[1]]) await views[m[1]](decodeURIComponent(m[2]), params); else await (views[path] || views.home)(null, params); }
+    catch (e) { if (me) { layout(path, 'Titan', `<div class="card">${esc(e.message)}<p class="small muted">${navigator.onLine ? '' : 'You are offline and this page has not been opened before.'}</p></div>`); } }
+    flush();
+  }
+  let deferredInstall = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; const b = document.getElementById('inst'); if (b) b.style.display = 'block'; });
+  window.addEventListener('hashchange', route);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {});
+  route();
+})();
+</script>
+</body>
+</html>

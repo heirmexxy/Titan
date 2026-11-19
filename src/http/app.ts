@@ -11,6 +11,8 @@ import type { IngestPipeline } from '../ingest/pipeline.js';
 import type { EmailSender } from '../notify/providers.js';
 import type { ApiKey, Device, Store } from '../store/types.js';
 import { HttpError, Router, type Req } from './router.js';
+import { createApiKeyAuth, type ApiKeyAuth } from './apikey.js';
+import { createDeviceAuth } from './deviceauth.js';
 
 export interface AppDeps {
   store: Store;
@@ -25,6 +27,11 @@ export interface AppDeps {
   staticDir?: string;
   actuators?: ActuatorService;
   carbon?: CarbonService;
+  apiKey?: ApiKeyAuth;
+  /** Other modules' handlers for verified Paystack events (PAYG payments, saved cards). Filled after start-up. */
+  paystackHooks?: ((event: any) => Promise<void>)[];
+  /** Extra webhook event names other modules emit (e.g. payg.payment). */
+  extraWebhookEvents?: string[];
 }
 
 const INTERVALS = new Set(['raw', '1m', '1h', '1d']);
@@ -47,24 +54,9 @@ export function createApp(d: AppDeps): Router {
     if (++b.n > RATE_PER_MIN) throw new HttpError(429, 'rate_limited', 'Too many requests; limit is 600 per minute per key');
   };
 
-  const apiKey = async (req: Req, scope?: string): Promise<ApiKey> => {
-    const h = req.headers.authorization ?? '';
-    const m = /^Bearer (tk_(live|test)_[A-Za-z0-9_-]{20,})$/.exec(h);
-    if (!m) throw new HttpError(401, 'unauthorized', 'Send Authorization: Bearer tk_live_…');
-    const key = await d.store.getApiKeyByHash(sha256Hex(m[1]));
-    if (!key || key.revokedAt) throw new HttpError(401, 'unauthorized', 'Invalid or revoked API key');
-    if (scope && !key.scopes.includes(scope)) throw new HttpError(403, 'forbidden', `Key lacks scope ${scope}`);
-    rateLimit(key.id);
-    await d.store.touchApiKey(key.id);
-    await d.store.addUsage(key.orgId, new Date().toISOString().slice(0, 10), { apiCalls: 1 });
-    return key;
-  };
+  const apiKey = d.apiKey ?? createApiKeyAuth(d.store);
 
-  const deviceAuth = async (req: Req): Promise<Device> => {
-    const m = /^Device ([A-Za-z0-9_-]+):(.+)$/.exec(req.headers.authorization ?? '');
-    if (!m || !(await d.devices.authenticate(m[1], m[2], m[1]))) throw new HttpError(401, 'unauthorized');
-    return (await d.store.getDevice(m[1]))!;
-  };
+  const deviceAuth = createDeviceAuth(d.devices, d.store);
 
   const parseDate = (v: string | null, fallback: Date) => {
     if (!v) return fallback;
@@ -160,7 +152,12 @@ export function createApp(d: AppDeps): Router {
     if (!d.billing) throw new HttpError(503, 'billing_disabled');
     if (!d.billing.verifyWebhook(req.rawBody, req.headers['x-paystack-signature'] as string | undefined)) throw new HttpError(401, 'bad_signature');
     const ev = req.body;
-    if (ev?.event === 'charge.success' && ev.data?.metadata?.app === 'titan') await d.billing.confirm(ev.data.reference);
+    if (ev?.event === 'charge.success' && ev.data?.metadata?.app === 'titan') {
+      if (ev.data.metadata.invoice_id) await d.billing.confirm(ev.data.reference);
+      for (const h of d.paystackHooks ?? []) {
+        try { await h(ev); } catch (e) { console.error(JSON.stringify({ level: 'error', msg: 'paystack hook failed', err: String(e) })); }
+      }
+    }
     return { body: { ok: true } };
   });
 
@@ -348,7 +345,7 @@ export function createApp(d: AppDeps): Router {
     const key = await apiKey(req, 'manage:webhooks');
     const { url, events } = req.body ?? {};
     if (typeof url !== 'string' || !/^https:\/\//.test(url)) throw new HttpError(400, 'invalid_url', 'Webhook URL must be https');
-    const allowed = ['alert.opened', 'alert.resolved', 'alert.*', 'device.online', 'device.offline', 'device.*', 'reading.created', 'event.created'];
+    const allowed = ['alert.opened', 'alert.resolved', 'alert.*', 'device.online', 'device.offline', 'device.*', 'reading.created', 'event.created', ...(d.extraWebhookEvents ?? [])];
     if (!Array.isArray(events) || !events.length || events.some((e) => !allowed.includes(e))) throw new HttpError(400, 'invalid_events', `events must be from: ${allowed.join(', ')}`);
     const secret = `whsec_${randomToken(24)}`;
     const w = await d.store.createWebhook(key.orgId, url, events, secret);

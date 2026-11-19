@@ -20,7 +20,7 @@ export interface AdminDeps {
 interface Session { userId: string; email: string; name: string | null; role: 'admin' | 'ops' }
 
 const SITE_KINDS = ['warehouse', 'aquaponics', 'hydroponics', 'greenhouse', 'cold_room', 'poultry', 'field', 'energy', 'other'];
-const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon'];
+const SCOPES = ['read:readings', 'read:alerts', 'manage:webhooks', 'manage:grants', 'control:devices', 'read:carbon', 'write:carbon', 'manage:firmware', 'manage:payg', 'read:quality', 'write:quality', 'export:data', 'verify:carbon'];
 const DEVICE_ID = /^[A-Z]{2,6}-\d{6,}$/;
 const INTERVAL_KEYS = ['telemetry_s', 'moisture_s', 'heartbeat_s'];
 

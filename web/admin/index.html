@@ -875,7 +875,7 @@
     layout('billing', h`<h1>Plans & usage</h1>
       <div class="panel"><h2>Plans</h2>
         <p class="small muted">Published plans appear on the landing page. With none published it shows "Talk to us about pricing".</p>
-        ${raw(plans.length ? `<div class="scroll"><table><thead><tr><th>Plan</th><th class="r">Per device / month</th><th class="r">Base fee</th><th class="r">API calls included</th><th>Published</th></tr></thead><tbody>${plans.map((p) => `<tr><td>${esc(p.name)} <code class="small">${esc(p.id)}</code></td><td class="r num">${esc(p.currency)} ${Number(p.price_per_device).toLocaleString()}</td><td class="r num">${Number(p.base_fee).toLocaleString()}</td><td class="r num">${Number(p.included_api_calls).toLocaleString()}</td><td>${p.published === true || p.published === 't' ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No plans yet.</p>')}
+        ${raw(plans.length ? `<div class="scroll"><table><thead><tr><th>Plan</th><th class="r">Per device / month</th><th class="r">Base fee</th><th class="r">API calls included</th><th>Published</th><th>Self-serve</th></tr></thead><tbody>${plans.map((p) => `<tr><td>${esc(p.name)} <code class="small">${esc(p.id)}</code>${p.device_limit ? `<div class="small muted">up to ${esc(p.device_limit)} devices · ${esc(p.trial_days)}-day trial</div>` : ''}</td><td class="r num">${esc(p.currency)} ${Number(p.price_per_device).toLocaleString()}</td><td class="r num">${Number(p.base_fee).toLocaleString()}</td><td class="r num">${Number(p.included_api_calls).toLocaleString()}</td><td>${p.published === true || p.published === 't' ? 'Yes' : 'No'}</td><td>${p.self_serve === true || p.self_serve === 't' ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No plans yet.</p>')}
         ${raw(admin ? `<h2 style="margin-top:1.2rem">Add or update a plan</h2><form class="f" id="plan-form">
           <label>Plan ID<input name="id" required placeholder="growth"></label><label>Name<input name="name" required placeholder="Growth"></label>
           <label>Currency<select name="currency"><option>NGN</option><option>USD</option></select></label>
@@ -885,7 +885,11 @@
           <label>Extra per 1,000 calls<input name="overagePer1kCalls" inputmode="decimal" value="0"></label>
           <label>Order<input name="sort" inputmode="numeric" value="0"></label>
           <label style="grid-column:1/-1">Features (one per line)<textarea name="features"></textarea></label>
+          <label>Free trial days<input name="trialDays" inputmode="numeric" value="14"></label>
+          <label>Device limit<input name="deviceLimit" inputmode="numeric" placeholder="blank = unlimited"></label>
+          <label style="grid-column:span 2">Short description<input name="description" maxlength="200"></label>
           <label class="row" style="gap:.4rem"><input type="checkbox" name="published" value="1" style="width:auto"> Show on landing page</label>
+          <label class="row" style="gap:.4rem"><input type="checkbox" name="selfServe" value="1" style="width:auto"> Offer on self-serve sign-up</label>
           <div><button class="primary" type="submit">Save plan</button></div><p class="form-msg small" style="grid-column:1/-1"></p></form>
           <h2 style="margin-top:1.2rem">Put an organisation on a plan</h2><form class="f" id="sub-form">
           <label>Organisation<select name="orgId">${orgs.map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
@@ -897,7 +901,7 @@
         <div class="scroll"><table style="margin-top:.75rem"><thead><tr><th>Organisation</th><th class="r">Active devices</th><th class="r">Messages</th><th class="r">Readings</th><th class="r">API calls</th><th class="r">Webhooks</th></tr></thead><tbody>
         ${raw(usage.map((u) => `<tr><td>${esc(u.name)}</td><td class="r num">${u.active_devices}</td><td class="r num">${Number(u.messages).toLocaleString()}</td><td class="r num">${Number(u.readings).toLocaleString()}</td><td class="r num">${Number(u.api_calls).toLocaleString()}</td><td class="r num">${Number(u.webhooks).toLocaleString()}</td></tr>`).join(''))}
         </tbody></table></div></div>`);
-    bindForm('#plan-form', async (d) => { await api('POST', '/plans', { ...d, published: d.published === '1' }); toast('Plan saved'); route(); });
+    bindForm('#plan-form', async (d) => { await api('POST', '/plans', { ...d, published: d.published === '1', selfServe: d.selfServe === '1' }); toast('Plan saved'); route(); });
     bindForm('#sub-form', async (d) => { await api('POST', '/subscriptions', d); toast('Plan assigned'); route(); });
     bindForm('#month-form', async (d) => { location.hash = `#billing?month=${d.month}`; });
   };

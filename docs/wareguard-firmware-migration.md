@@ -93,3 +93,12 @@ Install on two or three units at the pilot warehouses. Watch them for a week on 
 - It hasn't been compiled or run on hardware yet. Treat it as the specification in code and adapt it to your board.
 - Sequence numbers are saved to NVS every 100 messages and skipped ahead on boot, so numbers are never reused after a power cut without wearing out the flash.
 - The offline queue is a simple LittleFS file. When it's full it drops new telemetry but keeps events. A ring buffer that drops the *oldest* telemetry is better for production.
+
+## After the first install: updates over the air
+
+From version 2.1 of the reference firmware, WareGuard units update themselves from Titan, so later fixes need no site visit.
+
+1. Before building, copy Titan's firmware public key from **Admin → Firmware** (or `https://titan.kitovu.com.ng/api/firmware/public-key`) into `config.h` as `TITAN_FIRMWARE_KEY`.
+2. Use a partition scheme with two OTA slots (Arduino IDE: *Tools → Partition Scheme → Minimal SPIFFS (1.9MB APP with OTA)*), and turn on app rollback (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`).
+3. To release an update: raise `FW_VERSION`, build the `.bin` (*Sketch → Export Compiled Binary*), upload it on **Admin → Firmware**, and roll it out. Start with one device, then a batch of 10, then the rest.
+4. Each device checks the file's size, SHA-256 and Titan's signature before installing, and rolls back by itself if the new firmware can't reach Titan after restarting. The rollout page shows each device's progress and any failure reason.

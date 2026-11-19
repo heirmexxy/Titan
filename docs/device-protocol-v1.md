@@ -390,3 +390,60 @@ It may not publish a node's `up/lwt`, and it cannot publish for unassigned nodes
 | `ad` | appliance.door_opens | | | | |
 
 Example compact body: `{"v":1,"dev":"CK-000123","seq":88,"ts":1763022600,"up":5000,"buf":true,"r":[["st",182.5,"s1"],["bs",88,"bat"]]}`
+
+## 15. Firmware updates over the air
+
+Titan publishes firmware **releases** (one binary per device type and version) and rolls them out to devices in batches, only while they are online. Every release is fingerprinted and signed:
+
+- `sha256`: hex SHA-256 of the binary.
+- `sig`: base64url Ed25519 signature over the **32 raw bytes** of that SHA-256, made with Titan's firmware signing key.
+- Titan's public key (base64url, 32 bytes) is at `GET /api/firmware/public-key` and on the admin Firmware page. **Build it into the firmware.** It never changes unless Kitovu rotates it.
+
+**The command.** A device being updated receives, on `down/cmd`:
+
+```json
+{ "id": "c_9f1e…", "cmd": "ota.update",
+  "args": { "version": "2.1.0", "url": "https://titan.kitovu.com.ng/api/device/firmware/<releaseId>",
+            "size": 1048576, "sha256": "eace5d18…", "sig": "Wb3k…" } }
+```
+
+**What the device must do, in order:**
+
+1. Refuse if the battery is low, a door/alarm is active, or the version is not newer; reply `ack {id, ok:false, msg:"<reason>"}`.
+2. Otherwise `ack {id, ok:true}` straight away (Titan shows the device as *downloading*).
+3. Download `url` over HTTPS with the header `Authorization: Device <deviceId>:<token>` (the same token as the HTTPS fallback, §12). The response is the raw binary; `X-Titan-Sha256` repeats the fingerprint.
+4. Stream it into the inactive OTA partition while hashing. Check the length equals `size`, the SHA-256 equals `sha256`, and `sig` verifies against the built-in public key. **If any check fails, do not switch partitions**; send `event {code:"ota_failed", msg:"<which check>"}`.
+5. Switch the boot partition and restart. On the first boot of the new firmware, run a self-test (sensors read, network connects, Titan accepts a message); if it fails, roll back to the previous partition.
+6. Report `fw: "<new version>"` in every message (it already does). Titan marks the device *installed* when it sees the new version.
+
+Titan retries a device that does not answer within 30 minutes, up to 3 times, then marks it *failed* with the reason. Rollouts can be paused, resumed or cancelled at any time; devices already updated keep the new version.
+
+## 16. GradeGuard quality tests
+
+A GradeGuard (`gradeguard-v1`) is a handheld or bench tester for produce samples. Each test is one ordinary signed `telemetry` message whose readings are the sample results, plus a `qt` object that marks it as a test:
+
+```json
+{ "v": 1, "dev": "GG-000004", "seq": 311, "ts": 1763040000, "up": 8000, "buf": false, "fw": "1.0.2",
+  "r": [ { "m": "sample.moisture", "v": 13.4, "ch": "s" },
+         { "m": "sample.foreign_matter", "v": 1.1, "ch": "s" },
+         { "m": "sample.temperature", "v": 29.0, "ch": "s" } ],
+  "qt": { "lot": "RICE-0042", "spec": "<spec id>", "sample": "bag 14", "lat": 7.97, "lng": 3.59 } }
+```
+
+- Sample metrics: `sample.moisture` (%), `sample.temperature` (°C), `sample.foreign_matter` (%), `sample.broken` (%), `sample.discoloured` (%), `sample.aflatoxin` (ppb), `sample.hectolitre_mass` (kg/hl).
+- `qt.lot` (lot code from the bag tag, usually scanned) and `qt.spec` (buyer spec ID, downloaded with the device config) are optional. With a spec, Titan scores the test **pass** or **fail** and lists which limits failed; without one it records it as measured.
+- The test keeps a link to the signed message (`device_seq`), so a buyer can check the result was not edited.
+- GradeGuard units often work offline in the field: buffer tests and send them later with `buf: true` and the original `ts`, as in §9. Titan ignores repeats of the same `seq`.
+
+## 17. PAYG appliances
+
+A PAYG appliance (`paygo-appliance-v1`) obeys two commands:
+
+| Command | Args | Meaning |
+|---|---|---|
+| `paygo.unlock` | `until` (Unix seconds) | Run until that time, then lock **by itself**, even with no connection. `until: 0` means paid off: unlock for good. |
+| `paygo.lock` | none | Lock now. |
+
+- Store `until` in non-volatile memory and check it against the RTC every minute. If the RTC is lost, stay locked until the next `paygo.unlock` arrives.
+- Report the real state with the metric `appliance.locked` (1 locked, 0 unlocked) on change and in each heartbeat.
+- Titan sends `paygo.unlock` after every payment and `paygo.lock` when credit and the plan's grace period run out, and repeats the lock every 6 hours until the device confirms it.

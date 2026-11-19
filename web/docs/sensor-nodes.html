@@ -9,7 +9,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <body><nav aria-label="Docs"><b>Titan</b><a href="../index.html">Home</a><a href="index.html">Integration Guide</a><a href="device-protocol.html">Device protocol</a><a href="sensor-nodes.html">Sensor nodes</a></nav><main><h1>Titan sensor nodes: reference designs</h1>
 <p><strong>For:</strong> hardware engineers · <strong>Status:</strong> Draft v1 · All nodes follow <a href="device-protocol.html">Device Protocol v1</a>.</p>
 <p>Customers without their own IoT get a Titan node. Every node shares one base, and each use case adds its own sensor board. The firmware is common: provisioning, Ed25519 signing, offline buffering, config and commands. Only the sensor drivers change.</p>
-<h2>1. Common base</h2>
+<h2 id="1-common-base">1. Common base</h2>
 <table>
 <thead>
 <tr>
@@ -55,7 +55,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <p><strong>Provisioning on site:</strong> hold the setup button to open a Wi-Fi hotspot with a setup page. The installer enters the Wi-Fi details or the SIM APN, plus the provisioning code from Titan. The node generates its key and calls <code>/api/provision</code> (Protocol §11).</p>
-<h2>2. Biochar kiln node (<code>titan-kiln-v1</code>)</h2>
+<h2 id="2-biochar-kiln-node-titan-kiln-v1">2. Biochar kiln node (<code>titan-kiln-v1</code>)</h2>
 <p>Measures what a biochar carbon calculation needs from the production side. Lab results are entered in Titan separately.</p>
 <table>
 <thead>
@@ -100,7 +100,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <li><strong>Sampling:</strong> temperature every 30 s while a batch runs and every 5 min otherwise. Weighings are sent when the scale reading is stable.</li>
 <li><strong>How Titan uses it:</strong> a batch starts and ends with the button events. The &quot;held temperature&quot; is the highest temperature the coolest probe sustained for at least 10 minutes, which sets the permanence factor. Masses are summed per batch. Each number in the calculation links back to the signed messages it came from.</li>
 </ul>
-<h2>3. Cookstove node (<code>titan-cookstove-v1</code>)</h2>
+<h2 id="3-cookstove-node-titan-cookstove-v1">3. Cookstove node (<code>titan-cookstove-v1</code>)</h2>
 <p>A small, battery-powered stove use monitor.</p>
 <table>
 <thead>
@@ -131,7 +131,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <li><strong>How Titan uses it:</strong> cooking sessions are detected when the temperature rises above 60 °C and end when it falls below 45 °C. Sessions under 10 minutes are ignored. All thresholds are set per project. Sessions × the project&#39;s baseline fuel parameters give the reductions.</li>
 <li><strong>Tamper:</strong> a temperature that stays flat for weeks on a stove that&#39;s in use is flagged for a field visit.</li>
 </ul>
-<h2>4. Solar / PAYG node (<code>titan-solar-v1</code>, <code>paygo-appliance-v1</code>)</h2>
+<h2 id="4-solar-payg-node-titan-solar-v1-paygo-appliance-v1">4. Solar / PAYG node (<code>titan-solar-v1</code>, <code>paygo-appliance-v1</code>)</h2>
 <table>
 <thead>
 <tr>
@@ -172,20 +172,20 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <p><strong>Commands:</strong> <code>paygo.lock</code> / <code>paygo.unlock {until}</code>. The node keeps its own unlock-until time, so it stays correct while offline and locks at expiry even without a connection.</p>
-<h2>5. Many small nodes: LoRa gateway</h2>
+<h2 id="5-many-small-nodes-lora-gateway">5. Many small nodes: LoRa gateway</h2>
 <p>Where dozens of nodes sit close together (a cookstove programme in one community, a warehouse cluster):</p>
 <ul>
 <li>Nodes use LoRa to reach one gateway with Wi-Fi or GSM. Check the NCC&#39;s current band allocation before ordering radios (LoRaWAN regional parameters list Nigeria under EU863–870).</li>
 <li><strong>Each node still signs its own messages.</strong> The gateway forwards the envelopes unchanged to <code>titan/v1/&lt;nodeId&gt;/up/...</code> using its own MQTT login, and is authorised to publish for the nodes assigned to it. A compromised gateway can delay or drop data, but cannot change or invent it.</li>
 <li>Signed envelopes are about 300 bytes. For LoRa, nodes send compact readings with short metric codes inside the signed body (Device Protocol §14). Assign each node to its gateway in Titan (admin or client console → device → &quot;Connects through LoRa gateway&quot;).</li>
 </ul>
-<h2>6. Controller node (<code>titan-controller-v1</code>)</h2>
+<h2 id="6-controller-node-titan-controller-v1">6. Controller node (<code>titan-controller-v1</code>)</h2>
 <p>The base board plus relays (fans, pumps, aerators, valves) and 0–10 V/4–20 mA outputs.</p>
 <ul>
 <li><strong>Commands:</strong> <code>relay.set {channel, on}</code> and <code>setpoint.set {channel, value}</code>.</li>
 <li><strong>Safety:</strong> each output has a safe default (normally off). After <code>failsafe_s</code> seconds without contact, the node returns to that default. Automations in Titan switch outputs from readings on any device in the same organisation.</li>
 </ul>
-<h2>7. Bill of materials (indicative, to be priced by the hardware team)</h2>
+<h2 id="7-bill-of-materials-indicative-to-be-priced-by-the-hardware-team">7. Bill of materials (indicative, to be priced by the hardware team)</h2>
 <table>
 <thead>
 <tr>

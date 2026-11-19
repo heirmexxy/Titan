@@ -437,14 +437,17 @@ export function registerAdmin(r: Router, d: AdminDeps): { session: (req: Req, ro
     const n = (v: unknown) => { const x = Number(v ?? 0); if (!Number.isFinite(x) || x < 0) throw new HttpError(400, 'invalid_number'); return x; };
     const features = Array.isArray(b.features) ? b.features.map(String).slice(0, 12) : String(b.features ?? '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 12);
     const row = (await q(
-      `INSERT INTO plans (id, name, currency, price_per_device, base_fee, included_api_calls, overage_per_1k_calls, features, published, sort)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO plans (id, name, currency, price_per_device, base_fee, included_api_calls, overage_per_1k_calls, features, published, sort, trial_days, device_limit, self_serve, description)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, currency = EXCLUDED.currency, price_per_device = EXCLUDED.price_per_device,
          base_fee = EXCLUDED.base_fee, included_api_calls = EXCLUDED.included_api_calls, overage_per_1k_calls = EXCLUDED.overage_per_1k_calls,
-         features = EXCLUDED.features, published = EXCLUDED.published, sort = EXCLUDED.sort
+         features = EXCLUDED.features, published = EXCLUDED.published, sort = EXCLUDED.sort, trial_days = EXCLUDED.trial_days,
+         device_limit = EXCLUDED.device_limit, self_serve = EXCLUDED.self_serve, description = EXCLUDED.description
        RETURNING *`,
       [id, str(b.name, 'name'), b.currency === 'USD' ? 'USD' : 'NGN', n(b.pricePerDevice), n(b.baseFee), Math.round(n(b.includedApiCalls)),
-        n(b.overagePer1kCalls), features, b.published === true, Math.round(n(b.sort))])).rows[0];
+        n(b.overagePer1kCalls), features, b.published === true, Math.round(n(b.sort)), Math.min(Math.round(n(b.trialDays ?? 14)), 365),
+        b.deviceLimit === undefined || b.deviceLimit === '' || b.deviceLimit === null ? null : Math.round(n(b.deviceLimit)), b.selfServe === true,
+        typeof b.description === 'string' && b.description.trim() ? b.description.trim().slice(0, 200) : null])).rows[0];
     await audit(s, 'plan.saved', id, b);
     return { body: { plan: row } };
   });

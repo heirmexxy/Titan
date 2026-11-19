@@ -7,6 +7,8 @@
 #define WIFI_PASS    "change-me"
 #define TITAN_URL    "https://titan.kitovu.com.ng"
 #define MQTT_HOST    "mqtt.titan.kitovu.com.ng"
+// Titan's firmware signing public key (base64url). Copy it from Admin > Firmware or GET /api/firmware/public-key.
+#define TITAN_FIRMWARE_KEY "PASTE-PUBLIC-KEY-HERE"
 
 #define PIN_DHT       4
 #define PIN_PIR       27

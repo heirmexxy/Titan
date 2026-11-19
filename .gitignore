@@ -4,3 +4,4 @@ dist/
 *.log
 firmware/**/config.h
 .titan-device-*.json
+data/

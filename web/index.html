@@ -193,7 +193,8 @@
       <a class="hide-sm" href="#watch">Watch a demo</a>
       <a class="hide-sm" href="#developers">Developers</a>
       <a class="hide-sm" href="#pricing">Pricing</a>
-      <a href="#demo">Book a demo</a>
+      <a class="hide-sm" href="/console/">Sign in</a>
+      <a href="/signup/">Start free</a>
     </nav>
   </div>
 </header>
@@ -206,8 +207,8 @@
         <h1 id="hero-title" class="display">Know what's happening at every site. And prove it.</h1>
         <p class="lede">Titan connects your warehouse, farm, energy and carbon sensors to one place. You get alerts the moment something goes wrong, control over the equipment that fixes it, and data your systems, lenders and carbon verifiers can trust.</p>
         <div class="actions">
-          <a class="btn btn-primary" href="#demo">Book a demo</a>
-          <a class="btn btn-ghost" href="#watch">Watch a demo</a>
+          <a class="btn btn-primary" href="/signup/">Start a free trial</a>
+          <a class="btn btn-ghost" href="#demo">Book a demo</a>
         </div>
       </div>
 
@@ -324,9 +325,10 @@
           <tr><th scope="row">Cold rooms and cold chain</th><td>Prove the cold chain held, from intake to dispatch.</td><td class="m data">Temperature, door, power, battery</td></tr>
           <tr><th scope="row">Poultry houses</th><td>Protect flocks from heat stress and bad air.</td><td class="m data">Temperature, humidity, ammonia, fans</td></tr>
           <tr><th scope="row">Irrigation and solar power</th><td>Know pumps are running and batteries are charged without driving out to check.</td><td class="m data">Flow, soil moisture, voltage, energy, battery charge</td></tr>
-          <tr><th scope="row">Pay-as-you-go appliances</th><td>Track usage and location, lock and unlock units as payments arrive, and show financiers the assets behind your receivables.</td><td class="m data">Energy, runtime, door openings, location, lock state</td></tr>
+          <tr><th scope="row">Pay-as-you-go appliances</th><td>Every payment unlocks the appliance until its paid-up date, even offline; missed payments lock it. Customers pay on their own pay page or through your collections, and financiers see the assets behind your receivables.</td><td class="m data">Energy, runtime, door openings, location, lock state</td></tr>
           <tr><th scope="row">Clean cookstoves</th><td>Count real cooking sessions from every stove instead of surveys, and turn them into emission reductions.</td><td class="m data">Stove temperature, cooking energy, LPG use</td></tr>
-          <tr><th scope="row">Biochar and carbon removal</th><td>Record every batch from kiln to scale, add lab results, and get tonnes of carbon removed with every input traceable.</td><td class="m data">Kiln temperatures, feedstock and biochar weights, lab carbon</td></tr>
+          <tr><th scope="row">Biochar and carbon removal</th><td>Record every batch from kiln to scale, add lab results, let your verifier review the evidence in Titan, and prepare the package for Verra, Gold Standard, Puro.earth or Isometric.</td><td class="m data">Kiln temperatures, feedstock and biochar weights, lab carbon</td></tr>
+          <tr><th scope="row">Produce quality and traceability</th><td>Test samples in the field against each buyer's spec, tag every lot, and show buyers where it came from, how it was stored and that it passed.</td><td class="m data">Moisture, foreign matter, broken grains, aflatoxin, origin, custody</td></tr>
         </tbody>
       </table>
     </div>
@@ -340,7 +342,9 @@
         <p>Hardware makers get a published device protocol, MQTT over TLS with an HTTPS fallback, and offline buffering that keeps the original timestamps.</p>
         <p>Software teams get a REST API, signed webhooks, device commands, and readings aggregated by minute, hour or day.</p>
         <p>AI agents can connect too: Titan is an MCP server, and an agent gets exactly the access of the key you give it.</p>
-        <p>No sensors yet? We supply Titan nodes for kilns, cookstoves, solar systems and controllers, built on the same protocol.</p>
+        <p>Ship fixes without site visits: upload firmware, and Titan rolls it out in signed, checked batches.</p>
+        <p>Your team gets a phone app that works offline for installs, alerts and quality tests, and every dataset downloads as CSV or Excel.</p>
+        <p>No sensors yet? We supply Titan nodes for kilns, cookstoves, solar systems, controllers and produce testing, built on the same protocol.</p>
         <p><a href="docs/index.html">Read the API docs</a> or <a href="docs/device-protocol.html">the device protocol</a></p>
       </div>
       <div>
@@ -384,7 +388,7 @@ curl https://titan.kitovu.com.ng/v1/readings \
       <div id="plans" class="plans" hidden></div>
       <div id="talk" class="talk">
         <h3>Talk to us about pricing</h3>
-        <p>Tell us how many devices and sites you have and we'll put together a plan. WareGuard installations are quoted with hardware and setup included.</p>
+        <p>Tell us how many devices and sites you have and we'll put together a plan. WareGuard installations are quoted with hardware and setup included. Bringing your own devices? <a href="/signup/">Start a free trial</a>.</p>
         <a class="btn btn-primary" href="#demo">Get a quote</a>
       </div>
     </div>

@@ -21,6 +21,9 @@
 #include <time.h>
 #include "mbedtls/base64.h"
 #include "esp_random.h"
+#include <Update.h>
+#include "esp_ota_ops.h"
+#include "mbedtls/sha256.h"
 extern "C" {
 #include "monocypher.h"
 #include "monocypher-ed25519.h"
@@ -167,9 +170,69 @@ void applyConfig(JsonDocument &doc) {
   sendAck(ack.as<JsonVariantConst>());
 }
 
+// ---------- Firmware updates over the air (Device Protocol §15) ----------
+bool b64urlDecode(const String &in, uint8_t *out, size_t outCap, size_t &outLen) {
+  String s = in; s.replace('-', '+'); s.replace('_', '/');
+  while (s.length() % 4) s += '=';
+  return mbedtls_base64_decode(out, outCap, &outLen, (const unsigned char *)s.c_str(), s.length()) == 0;
+}
+bool hexDecode(const String &hex, uint8_t *out, size_t n) {
+  if (hex.length() != n * 2) return false;
+  for (size_t i = 0; i < n; i++) out[i] = (uint8_t)strtoul(hex.substring(i * 2, i * 2 + 2).c_str(), nullptr, 16);
+  return true;
+}
+
+// Downloads, checks size + SHA-256 + Titan's Ed25519 signature, then switches partition. Returns "" or the failure.
+String runOta(JsonVariantConst a) {
+  String url = a["url"] | "", version = a["version"] | "";
+  size_t size = a["size"] | 0;
+  uint8_t wantHash[32], sig[64], pub[32]; size_t n = 0;
+  if (!url.startsWith(TITAN_URL)) return "url not on Titan";
+  if (version == FW_VERSION) return "already on this version";
+  if (!hexDecode(a["sha256"] | "", wantHash, 32)) return "bad sha256";
+  if (!b64urlDecode(a["sig"] | "", sig, sizeof sig, n) || n != 64) return "bad signature format";
+  if (!b64urlDecode(TITAN_FIRMWARE_KEY, pub, sizeof pub, n) || n != 32) return "no firmware key built in";
+  // Titan signs the digest; check the signature before downloading anything.
+  if (crypto_ed25519_check(sig, pub, wantHash, 32) != 0) return "signature does not verify";
+
+  WiFiClientSecure c; c.setCACert(ISRG_ROOT_X1);
+  HTTPClient http; http.begin(c, url); http.setTimeout(30000);
+  http.addHeader("Authorization", String("Device ") + DEVICE_ID + ":" + token);
+  int code = http.GET();
+  if (code != 200) { http.end(); return "download failed " + String(code); }
+  if ((size_t)http.getSize() != size) { http.end(); return "size mismatch"; }
+  if (!Update.begin(size)) { http.end(); return "no room for update"; }
+  mbedtls_sha256_context sha; mbedtls_sha256_init(&sha); mbedtls_sha256_starts(&sha, 0);
+  WiFiClient *st = http.getStreamPtr();
+  uint8_t buf[2048]; size_t got = 0; uint32_t lastData = millis();
+  while (got < size && millis() - lastData < 30000) {
+    size_t avail = st->available();
+    if (!avail) { delay(5); continue; }
+    int r = st->readBytes(buf, min(avail, sizeof buf));
+    if (r <= 0) continue;
+    mbedtls_sha256_update(&sha, buf, r);
+    if (Update.write(buf, r) != (size_t)r) { Update.abort(); http.end(); return "flash write failed"; }
+    got += r; lastData = millis();
+    mqtt.loop();
+  }
+  http.end();
+  uint8_t gotHash[32]; mbedtls_sha256_finish(&sha, gotHash); mbedtls_sha256_free(&sha);
+  if (got != size) { Update.abort(); return "download incomplete"; }
+  if (memcmp(gotHash, wantHash, 32) != 0) { Update.abort(); return "sha256 mismatch"; }
+  if (!Update.end(true)) return "update not accepted";    // only now does the boot partition change
+  return "";
+}
+
 void handleCommand(JsonDocument &doc) {
   String cmd = doc["cmd"] | "", id = doc["id"] | "";
   JsonDocument ack; ack["id"] = id; ack["ok"] = true;
+  if (cmd == "ota.update") {
+    sendAck(ack.as<JsonVariantConst>());   // accepted; Titan shows "downloading"
+    mqtt.loop();
+    String err = runOta(doc["args"]);
+    if (err.length()) { sendEvent("ota_failed", "", "warning", err.c_str()); return; }
+    delay(500); ESP.restart();             // new firmware reports its version in every message
+  }
   if (cmd == "alarm_ack") { digitalWrite(PIN_BUZZER, LOW); }
   else if (cmd == "send_state") { lastHeartbeat = 0; }
   else if (cmd == "time_sync") { timeval tv = { (time_t)(doc["args"]["time"] | 0), 0 }; settimeofday(&tv, nullptr); }
@@ -297,7 +360,20 @@ void setup() {
   sendEvent("boot", "", "info", esp_reset_reason() == ESP_RST_POWERON ? "power on" : "reset");
 }
 
+// First boot after an update: keep the new firmware only once it has reached Titan; otherwise roll back on next reset.
+bool otaPendingVerify() {
+  esp_ota_img_states_t st;
+  return esp_ota_get_state_partition(esp_ota_get_running_partition(), &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY;
+}
+void otaConfirmIfHealthy() {
+  static bool done = false;
+  if (done || !mqtt.connected()) return;
+  if (otaPendingVerify()) esp_ota_mark_app_valid_cancel_rollback();
+  done = true;
+}
+
 void loop() {
+  otaConfirmIfHealthy();
   if (WiFi.status() != WL_CONNECTED) WiFi.reconnect();
   connectMqtt();
   mqtt.loop();

@@ -373,3 +373,14 @@ test('health: deep check reports components without leaking details', { skip }, 
   const adm = await asStaff('GET', '/admin/api/health');
   assert.ok(adm.json.checks[0].detail);
 });
+
+test('evidence fingerprint ignores readiness and registry labels', { skip }, async () => {
+  const project = (await q(`SELECT id FROM carbon_projects WHERE org_id = $1 LIMIT 1`, [org])).rows[0].id;
+  const a = await ext.registry.evidence(project);
+  await q(`UPDATE carbon_projects SET registry = 'Isometric' WHERE id = $1`, [project]);
+  const b = await ext.registry.evidence(project);
+  assert.equal(a.sha256, b.sha256);
+  await q(`UPDATE carbon_activities SET result = jsonb_set(result, '{netTco2e}', '1.3') WHERE project_id = $1`, [project]);
+  const c = await ext.registry.evidence(project);
+  assert.notEqual(a.sha256, c.sha256, 'a changed result changes the fingerprint');
+});

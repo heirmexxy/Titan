@@ -1,0 +1,7 @@
+[Unit]
+Description=Titan watchdog (health check, self-repair, alerts)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/titan/deploy/watchdog.py

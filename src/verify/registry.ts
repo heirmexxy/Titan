@@ -108,7 +108,11 @@ export class RegistryService {
       howToVerify: full.howToVerify,
       proofEndpoint: `${this.publicUrl}/v1/readings/proof?device=<deviceId>&seq=<seq>`,
     };
-    return { ...body, sha256: fingerprint(body), generatedAt: new Date().toISOString() };
+    // Fingerprint the evidence itself: inputs, results and lab files. Titan's readiness checklist and the
+    // registry labels are left out, as they can change without the evidence changing.
+    const { registry: _registry, ...projectCore } = body.project ?? {};
+    const hashed = { ...body, project: projectCore, activities: acts.map(({ readiness: _r, ...rest }: any) => rest) };
+    return { ...body, sha256: fingerprint(hashed), generatedAt: new Date().toISOString() };
   }
 
   // ---------- Findings ----------

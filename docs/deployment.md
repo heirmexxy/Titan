@@ -110,3 +110,31 @@ Nightly `pg_dump -Fc titan` to a file, then upload to Google Drive (e.g. with `r
 ## Paystack
 
 Webhook URL: `https://titan.kitovu.com.ng/api/paystack/webhook`. Callback URL: `https://titan.kitovu.com.ng/api/paystack/callback`. Until Paystack allows several webhooks per account, payments are confirmed on the callback using the verify API.
+
+## Updating Titan
+
+Run as root on the server:
+
+```bash
+bash /opt/titan/deploy/upgrade.sh
+```
+
+It pulls the latest code, installs packages, builds, applies new database migrations, installs the daily backup and the watchdog, restarts Titan and prints the health checks.
+
+## Monitoring
+
+- **On the server:** `titan-watchdog.timer` runs `deploy/watchdog.py` every minute. It restarts PostgreSQL, Titan or EMQX if one has stopped, restarts Titan if it stops answering for 3 minutes, and emails `MONITOR_EMAILS` / texts `MONITOR_PHONES` (from `.env`, via Resend and Termii) when something has been wrong for 2 minutes, every 6 hours while it stays wrong, and when it recovers.
+- **Off the server:** a watchdog cannot report that its own server is down. On another server (for example srv746534), copy `deploy/remote-monitor.sh` and add to root's crontab:
+  `*/5 * * * * RESEND_API_KEY=re_xxx MONITOR_EMAILS=titan@kitovu.com.ng /opt/titan-monitor/remote-monitor.sh`
+  Or point any uptime service (UptimeRobot, Better Stack) at `https://titan.kitovu.com.ng/healthz/deep`, which answers 503 when something critical is failing.
+- **In the admin:** System health shows each check, the worker and watchdog heartbeats, backups and certificate expiry.
+
+## Firmware signing key
+
+Titan creates its firmware signing key on first start at `/opt/titan/data/firmware/signing-key.pem`. Devices built with its public key only accept updates signed by it, so **the daily backup includes it**. If the key is lost, devices must be updated in person with firmware containing the new public key.
+
+## Removing a test device
+
+```bash
+cd /opt/titan && sudo -u titan npm run -s cli -- device:delete WG-TEST01 --yes
+```

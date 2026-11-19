@@ -49,6 +49,22 @@ const commands: Record<string, () => Promise<unknown>> = {
     return { deviceId: args[0], provisioningCode: await devices.issueProvisionCode(args[0]), expires: '7 days' };
   },
   async 'device:code'() { need(1, 'device:code <deviceId>'); return { provisioningCode: await devices.issueProvisionCode(args[0]) }; },
+  /** Removes a device and everything it sent (readings, alerts, commands). For test devices; real devices should be disabled instead. */
+  async 'device:delete'() {
+    need(2, 'device:delete <deviceId> --yes');
+    if (args[1] !== '--yes') throw new Error('Add --yes to confirm: this deletes the device and all its readings');
+    const id = args[0];
+    const q = (t: string) => store.pool.query(t, [id]);
+    const t = ['readings', 'events', 'messages', 'alerts', 'alert_rules', 'commands', 'automation_state', 'device_firmware', 'device_keys', 'quality_tests'];
+    const counts: Record<string, number> = {};
+    for (const table of t) {
+      try { counts[table] = (await q(`DELETE FROM ${table} WHERE device_id = $1`)).rowCount ?? 0; } catch { /* table without device_id */ }
+    }
+    await store.pool.query(`UPDATE devices SET gateway_id = NULL WHERE gateway_id = $1`, [id]);
+    const d = await q(`DELETE FROM devices WHERE id = $1`);
+    if (!d.rowCount) throw new Error(`No device ${id}`);
+    return { deleted: id, removed: counts };
+  },
   async 'config:push'() { need(1, 'config:push <deviceId>'); return devices.pushConfig(args[0], null); },
   async 'apikey:create'() {
     need(2, 'apikey:create <orgId> <name> [--scopes read:readings,read:alerts,manage:webhooks,manage:grants]');

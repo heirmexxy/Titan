@@ -10,7 +10,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <p><strong>Status:</strong> Draft for hardware review · <strong>Owner:</strong> Kitovu Technology Company Limited · <strong>Applies to:</strong> WareGuard and any third-party device connecting to Titan (<code>titan.kitovu.com.ng</code>)</p>
 <p>This document defines how devices connect to Titan, sign their readings, and receive configuration and commands. Sensor acquisition, displays and offline local alarms are up to each device and are not covered here.</p>
 <hr>
-<h2>1. At a glance</h2>
+<h2 id="1-at-a-glance">1. At a glance</h2>
 <table>
 <thead>
 <tr>
@@ -56,7 +56,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <hr>
-<h2>2. Connection</h2>
+<h2 id="2-connection">2. Connection</h2>
 <table>
 <thead>
 <tr>
@@ -108,7 +108,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <p><strong>Device ID format:</strong> <code>&lt;PREFIX&gt;-&lt;6+ digits&gt;</code>. WareGuard uses <code>WG-</code>. Third-party manufacturers are assigned their own prefix at onboarding.</p>
 <p><strong>GSM note:</strong> use a modem with native TLS 1.2 (e.g. SIMCom A7670 / SIM7600 class). SIM800-class modems cannot do modern TLS reliably and are not supported.</p>
 <hr>
-<h2>3. Topics</h2>
+<h2 id="3-topics">3. Topics</h2>
 <p>Uplink (device → Titan), all QoS 1:</p>
 <table>
 <thead>
@@ -157,7 +157,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tbody></table>
 <p>The broker enforces that a device can only publish and subscribe under its own <code>&lt;deviceId&gt;</code>.</p>
 <hr>
-<h2>4. Uplink envelope</h2>
+<h2 id="4-uplink-envelope">4. Uplink envelope</h2>
 <p>Every uplink payload (except <code>lwt</code>) is a small JSON wrapper:</p>
 <pre><code class="language-json">{&quot;k&quot;:&quot;k1&quot;,&quot;p&quot;:&quot;&lt;base64url(body)&gt;&quot;,&quot;s&quot;:&quot;&lt;base64url(signature)&gt;&quot;}
 </code></pre>
@@ -182,7 +182,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <p>Signing the exact body bytes means there is no JSON canonicalisation problem: the device signs whatever string it produced, and Titan verifies those same bytes. Titan stores the original <code>p</code> and <code>s</code> so any reading can later be re-verified by a third party (lender, auditor) using the device&#39;s public key.</p>
-<h3>4.1 Body</h3>
+<h3 id="4-1-body">4.1 Body</h3>
 <pre><code class="language-json">{
   &quot;v&quot;: 1,
   &quot;dev&quot;: &quot;WG-000123&quot;,
@@ -282,7 +282,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <td>Acknowledgement (Section 8)</td>
 </tr>
 </tbody></table>
-<h3>4.2 Readings</h3>
+<h3 id="4-2-readings">4.2 Readings</h3>
 <table>
 <thead>
 <tr>
@@ -324,7 +324,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <p><strong>Moisture rule:</strong> always send both <code>produce.moisture_raw</code> (the sensor&#39;s raw reading) and <code>produce.moisture</code> (calibrated, % wet basis) with the <code>cal</code> profile ID. If a calibration curve is later corrected, Titan can recompute history from the raw value.</p>
-<h3>4.3 Signing (Ed25519)</h3>
+<h3 id="4-3-signing-ed25519">4.3 Signing (Ed25519)</h3>
 <ol>
 <li>Build the body JSON string <code>B</code> (any key order and whitespace).</li>
 <li><code>sig = Ed25519_sign(device_private_key, bytes(B))</code>.</li>
@@ -337,7 +337,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <li>Base64url: standard base64 with <code>+</code>→<code>-</code>, <code>/</code>→<code>_</code>, padding <code>=</code> removed.</li>
 </ul>
 <p>Third-party devices that cannot do Ed25519 may be approved for <code>HMAC-SHA256</code> (key ID prefix <code>h</code>), but readings from those devices are labelled <em>integrity: shared-secret</em> rather than <em>integrity: device-signed</em> in the API.</p>
-<h3>4.4 What Titan does with each message</h3>
+<h3 id="4-4-what-titan-does-with-each-message">4.4 What Titan does with each message</h3>
 <ol>
 <li>Checks the MQTT username matches <code>dev</code>.</li>
 <li>Verifies the signature against the registered public key for <code>k</code>. Fails → message rejected and logged as a tamper event.</li>
@@ -348,7 +348,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <li>Evaluates alert rules and meters usage.</li>
 </ol>
 <hr>
-<h2>5. Metric registry (initial)</h2>
+<h2 id="5-metric-registry-initial">5. Metric registry (initial)</h2>
 <p>Device firmware must use these keys and units. New metrics are added by Titan admins; devices should never invent keys.</p>
 <table>
 <thead>
@@ -636,7 +636,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tbody></table>
 <p>Device-health values (battery, signal, uptime) go in <code>state</code> messages, not as readings.</p>
 <hr>
-<h2>6. Events (<code>up/event</code>)</h2>
+<h2 id="6-events-up-event">6. Events (<code>up/event</code>)</h2>
 <p>Send immediately; do not wait for the next telemetry cycle.</p>
 <pre><code class="language-json">{
   &quot;v&quot;: 1, &quot;dev&quot;: &quot;WG-000123&quot;, &quot;seq&quot;: 1043, &quot;ts&quot;: 1763022611, &quot;up&quot;: 86411002, &quot;buf&quot;: false,
@@ -686,7 +686,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tbody></table>
 <p>Severity <code>sev</code>: <code>info</code>, <code>warning</code>, <code>critical</code>.</p>
 <hr>
-<h2>7. Heartbeat (<code>up/state</code>)</h2>
+<h2 id="7-heartbeat-up-state">7. Heartbeat (<code>up/state</code>)</h2>
 <p>Send on connect and every <code>heartbeat_s</code> seconds (from config).</p>
 <pre><code class="language-json">{
   &quot;v&quot;: 1, &quot;dev&quot;: &quot;WG-000123&quot;, &quot;seq&quot;: 1044, &quot;ts&quot;: 1763022660, &quot;up&quot;: 86460000, &quot;buf&quot;: false, &quot;fw&quot;: &quot;1.3.0&quot;,
@@ -735,8 +735,8 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tbody></table>
 <p>Titan marks a device <strong>offline</strong> if no message arrives within <code>3 × heartbeat_s</code>, or immediately when the broker reports the connection dropped.</p>
 <hr>
-<h2>8. Configuration and commands (downlink)</h2>
-<h3>8.1 Config (<code>down/config</code>, retained)</h3>
+<h2 id="8-configuration-and-commands-downlink">8. Configuration and commands (downlink)</h2>
+<h3 id="8-1-config-down-config-retained">8.1 Config (<code>down/config</code>, retained)</h3>
 <p>Titan publishes the <strong>whole</strong> config document whenever an admin changes anything. Because it is retained, a device receives the latest config every time it connects.</p>
 <pre><code class="language-json">{
   &quot;v&quot;: 1,
@@ -753,7 +753,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 }
 </code></pre>
 <p>Reporting intervals are set by Titan admins per device type, per connection type (Wi-Fi/GSM), with optional per-device overrides. The device must apply the new config and reply with an <code>ack</code> carrying the <code>cfg</code> number. Titan shows a config as <em>pending</em> until it is acknowledged.</p>
-<h3>8.2 Commands (<code>down/cmd</code>, not retained)</h3>
+<h3 id="8-2-commands-down-cmd-not-retained">8.2 Commands (<code>down/cmd</code>, not retained)</h3>
 <pre><code class="language-json">{&quot;v&quot;: 1, &quot;id&quot;: &quot;c_8f2a&quot;, &quot;cmd&quot;: &quot;alarm_ack&quot;, &quot;args&quot;: {&quot;code&quot;: &quot;intruder_detected&quot;}}
 </code></pre>
 <table>
@@ -782,13 +782,13 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tbody></table>
 <p>Device types can also declare their own commands (for example <code>relay.set {channel, on}</code> on a controller, or <code>paygo.lock</code> / <code>paygo.unlock {until}</code> on a pay-as-you-go appliance). Titan only sends a command the device&#39;s type lists, with arguments already checked against that list, and records who sent it (a person, an API key or an automation). The device must reply to every command with an <code>ack</code> carrying its <code>id</code>, <code>ok: false</code> and a short <code>msg</code> if it could not act.</p>
 <p>Actuating devices must keep a safe state if the connection is lost: a relay switched on by an automation should fall back to its configured default after <code>failsafe_s</code> seconds without contact (set per device in config; <code>0</code> disables it).</p>
-<h3>8.3 Acknowledgement (<code>up/ack</code>)</h3>
+<h3 id="8-3-acknowledgement-up-ack">8.3 Acknowledgement (<code>up/ack</code>)</h3>
 <pre><code class="language-json">{&quot;v&quot;: 1, &quot;dev&quot;: &quot;WG-000123&quot;, &quot;seq&quot;: 1045, &quot;ts&quot;: 1763022702, &quot;up&quot;: 86502000, &quot;buf&quot;: false,
  &quot;ack&quot;: {&quot;cfg&quot;: 8, &quot;ok&quot;: true}}
 </code></pre>
 <p>For a command: <code>&quot;ack&quot;: {&quot;id&quot;: &quot;c_8f2a&quot;, &quot;ok&quot;: true, &quot;msg&quot;: &quot;&quot;}</code>.</p>
 <hr>
-<h2>9. Offline operation and buffering</h2>
+<h2 id="9-offline-operation-and-buffering">9. Offline operation and buffering</h2>
 <ul>
 <li>Sensor reading, LCD updates and local alarms continue with no connection.</li>
 <li>While offline, signed telemetry and event messages are stored in a flash ring buffer (recommended minimum: 72 hours at the configured interval). If the buffer fills, drop the <strong>oldest telemetry first; never drop events</strong>.</li>
@@ -796,14 +796,14 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <li>On reconnect: publish <code>state</code> first, then buffered messages oldest first with <code>buf: true</code>, at most 5 messages per second, then resume live reporting.</li>
 <li>Reconnect with exponential backoff: 5 s, 10 s, 20 s… capped at 5 minutes, with random jitter.</li>
 </ul>
-<h2>10. Time</h2>
+<h2 id="10-time">10. Time</h2>
 <ul>
 <li>Wi-Fi: NTP (<code>pool.ntp.org</code>, <code>time.google.com</code>) at boot and every 6 hours.</li>
 <li>GSM: network time (<code>AT+CCLK?</code>) or NTP over the data link.</li>
 <li>A battery-backed RTC (e.g. DS3231) is strongly recommended so buffered readings keep correct time across power cuts.</li>
 <li>If the clock is unsynced, send <code>ts: 0</code> plus <code>up</code> and <code>upn</code>; Titan estimates the time and marks those readings <code>time_estimated</code>.</li>
 </ul>
-<h2>11. Provisioning</h2>
+<h2 id="11-provisioning">11. Provisioning</h2>
 <ol>
 <li>Titan admin registers the device (ID, type, organisation, site) and receives a one-time <strong>provisioning code</strong>.</li>
 <li>On first boot in provisioning mode, the device generates its Ed25519 key pair, then calls <code>POST https://titan.kitovu.com.ng/api/provision</code> with <code>{deviceId, code, publicKey}</code> over TLS.</li>
@@ -811,9 +811,9 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 <li>Production firmware is built with flash encryption and secure boot enabled, so the key and token cannot be read off the chip.</li>
 </ol>
 <p>Key rotation: Titan admin issues a new provisioning code; the device generates <code>k2</code>; readings signed with <code>k1</code> remain verifiable forever.</p>
-<h2>12. HTTPS fallback</h2>
+<h2 id="12-https-fallback">12. HTTPS fallback</h2>
 <p>Devices that cannot use MQTT may <code>POST https://titan.kitovu.com.ng/api/ingest</code> with the same envelope as the body, header <code>Authorization: Device &lt;deviceId&gt;:&lt;token&gt;</code>, and header <code>X-Titan-Kind: telemetry|event|state|ack</code>. Config is fetched with <code>GET /api/device/config</code>. MQTT is preferred because downlinks are instant.</p>
-<h2>13. Defaults for WareGuard</h2>
+<h2 id="13-defaults-for-wareguard">13. Defaults for WareGuard</h2>
 <table>
 <thead>
 <tr>
@@ -844,7 +844,7 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <p>All values are editable in the Titan admin panel.</p>
-<h2>14. v1.1 additions: LoRa gateways and compact readings</h2>
+<h2 id="14-v1-1-additions-lora-gateways-and-compact-readings">14. v1.1 additions: LoRa gateways and compact readings</h2>
 <p><strong>Gateway relaying.</strong> A LoRa gateway (<code>titan-lora-gateway-v1</code>) connects to the broker with its own credentials. For each node assigned to it in Titan, it may:</p>
 <ul>
 <li>publish the node&#39;s signed envelopes, unchanged, to <code>titan/v1/&lt;nodeId&gt;/up/telemetry|event|state|ack</code></li>
@@ -945,4 +945,66 @@ pre{background:#14213D;color:#DCE6E2;padding:1rem 1.2rem;border-radius:8px;overf
 </tr>
 </tbody></table>
 <p>Example compact body: <code>{&quot;v&quot;:1,&quot;dev&quot;:&quot;CK-000123&quot;,&quot;seq&quot;:88,&quot;ts&quot;:1763022600,&quot;up&quot;:5000,&quot;buf&quot;:true,&quot;r&quot;:[[&quot;st&quot;,182.5,&quot;s1&quot;],[&quot;bs&quot;,88,&quot;bat&quot;]]}</code></p>
+<h2 id="15-firmware-updates-over-the-air">15. Firmware updates over the air</h2>
+<p>Titan publishes firmware <strong>releases</strong> (one binary per device type and version) and rolls them out to devices in batches, only while they are online. Every release is fingerprinted and signed:</p>
+<ul>
+<li><code>sha256</code>: hex SHA-256 of the binary.</li>
+<li><code>sig</code>: base64url Ed25519 signature over the <strong>32 raw bytes</strong> of that SHA-256, made with Titan&#39;s firmware signing key.</li>
+<li>Titan&#39;s public key (base64url, 32 bytes) is at <code>GET /api/firmware/public-key</code> and on the admin Firmware page. <strong>Build it into the firmware.</strong> It never changes unless Kitovu rotates it.</li>
+</ul>
+<p><strong>The command.</strong> A device being updated receives, on <code>down/cmd</code>:</p>
+<pre><code class="language-json">{ &quot;id&quot;: &quot;c_9f1e…&quot;, &quot;cmd&quot;: &quot;ota.update&quot;,
+  &quot;args&quot;: { &quot;version&quot;: &quot;2.1.0&quot;, &quot;url&quot;: &quot;https://titan.kitovu.com.ng/api/device/firmware/&lt;releaseId&gt;&quot;,
+            &quot;size&quot;: 1048576, &quot;sha256&quot;: &quot;eace5d18…&quot;, &quot;sig&quot;: &quot;Wb3k…&quot; } }
+</code></pre>
+<p><strong>What the device must do, in order:</strong></p>
+<ol>
+<li>Refuse if the battery is low, a door/alarm is active, or the version is not newer; reply <code>ack {id, ok:false, msg:&quot;&lt;reason&gt;&quot;}</code>.</li>
+<li>Otherwise <code>ack {id, ok:true}</code> straight away (Titan shows the device as <em>downloading</em>).</li>
+<li>Download <code>url</code> over HTTPS with the header <code>Authorization: Device &lt;deviceId&gt;:&lt;token&gt;</code> (the same token as the HTTPS fallback, §12). The response is the raw binary; <code>X-Titan-Sha256</code> repeats the fingerprint.</li>
+<li>Stream it into the inactive OTA partition while hashing. Check the length equals <code>size</code>, the SHA-256 equals <code>sha256</code>, and <code>sig</code> verifies against the built-in public key. <strong>If any check fails, do not switch partitions</strong>; send <code>event {code:&quot;ota_failed&quot;, msg:&quot;&lt;which check&gt;&quot;}</code>.</li>
+<li>Switch the boot partition and restart. On the first boot of the new firmware, run a self-test (sensors read, network connects, Titan accepts a message); if it fails, roll back to the previous partition.</li>
+<li>Report <code>fw: &quot;&lt;new version&gt;&quot;</code> in every message (it already does). Titan marks the device <em>installed</em> when it sees the new version.</li>
+</ol>
+<p>Titan retries a device that does not answer within 30 minutes, up to 3 times, then marks it <em>failed</em> with the reason. Rollouts can be paused, resumed or cancelled at any time; devices already updated keep the new version.</p>
+<h2 id="16-gradeguard-quality-tests">16. GradeGuard quality tests</h2>
+<p>A GradeGuard (<code>gradeguard-v1</code>) is a handheld or bench tester for produce samples. Each test is one ordinary signed <code>telemetry</code> message whose readings are the sample results, plus a <code>qt</code> object that marks it as a test:</p>
+<pre><code class="language-json">{ &quot;v&quot;: 1, &quot;dev&quot;: &quot;GG-000004&quot;, &quot;seq&quot;: 311, &quot;ts&quot;: 1763040000, &quot;up&quot;: 8000, &quot;buf&quot;: false, &quot;fw&quot;: &quot;1.0.2&quot;,
+  &quot;r&quot;: [ { &quot;m&quot;: &quot;sample.moisture&quot;, &quot;v&quot;: 13.4, &quot;ch&quot;: &quot;s&quot; },
+         { &quot;m&quot;: &quot;sample.foreign_matter&quot;, &quot;v&quot;: 1.1, &quot;ch&quot;: &quot;s&quot; },
+         { &quot;m&quot;: &quot;sample.temperature&quot;, &quot;v&quot;: 29.0, &quot;ch&quot;: &quot;s&quot; } ],
+  &quot;qt&quot;: { &quot;lot&quot;: &quot;RICE-0042&quot;, &quot;spec&quot;: &quot;&lt;spec id&gt;&quot;, &quot;sample&quot;: &quot;bag 14&quot;, &quot;lat&quot;: 7.97, &quot;lng&quot;: 3.59 } }
+</code></pre>
+<ul>
+<li>Sample metrics: <code>sample.moisture</code> (%), <code>sample.temperature</code> (°C), <code>sample.foreign_matter</code> (%), <code>sample.broken</code> (%), <code>sample.discoloured</code> (%), <code>sample.aflatoxin</code> (ppb), <code>sample.hectolitre_mass</code> (kg/hl).</li>
+<li><code>qt.lot</code> (lot code from the bag tag, usually scanned) and <code>qt.spec</code> (buyer spec ID, downloaded with the device config) are optional. With a spec, Titan scores the test <strong>pass</strong> or <strong>fail</strong> and lists which limits failed; without one it records it as measured.</li>
+<li>The test keeps a link to the signed message (<code>device_seq</code>), so a buyer can check the result was not edited.</li>
+<li>GradeGuard units often work offline in the field: buffer tests and send them later with <code>buf: true</code> and the original <code>ts</code>, as in §9. Titan ignores repeats of the same <code>seq</code>.</li>
+</ul>
+<h2 id="17-payg-appliances">17. PAYG appliances</h2>
+<p>A PAYG appliance (<code>paygo-appliance-v1</code>) obeys two commands:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Args</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>paygo.unlock</code></td>
+<td><code>until</code> (Unix seconds)</td>
+<td>Run until that time, then lock <strong>by itself</strong>, even with no connection. <code>until: 0</code> means paid off: unlock for good.</td>
+</tr>
+<tr>
+<td><code>paygo.lock</code></td>
+<td>none</td>
+<td>Lock now.</td>
+</tr>
+</tbody></table>
+<ul>
+<li>Store <code>until</code> in non-volatile memory and check it against the RTC every minute. If the RTC is lost, stay locked until the next <code>paygo.unlock</code> arrives.</li>
+<li>Report the real state with the metric <code>appliance.locked</code> (1 locked, 0 unlocked) on change and in each heartbeat.</li>
+<li>Titan sends <code>paygo.unlock</code> after every payment and <code>paygo.lock</code> when credit and the plan&#39;s grace period run out, and repeats the lock every 6 hours until the device confirms it.</li>
+</ul>
 </main></body></html>

@@ -37,6 +37,8 @@ ask TERMII_API_KEY      "Termii API key" 1
 ask TERMII_SENDER_ID    "Termii sender ID (as approved by Termii)" 0
 ask PAYSTACK_SECRET_KEY "Paystack secret key (sk_live_...)" 1
 ask ANTHROPIC_API_KEY   "Anthropic API key (optional, sk-ant-...)" 1
+ask MONITOR_EMAILS      "Emails for downtime alerts (comma-separated)" 0
+ask MONITOR_PHONES      "Phones for downtime texts, e.g. +23480… (comma-separated)" 0
 chmod 600 $ENV; chown titan:titan $ENV
 systemctl restart titan; sleep 3
 echo "TITAN: $(systemctl is-active titan)"

@@ -286,7 +286,10 @@ test('GradeGuard: specs, manual and device tests, lots, custody and trace', { sk
   const tr = await asKey("GET", `/v1/lots/${code}`);
   assert.equal(tr.status, 200, tr.text);
   const trace = tr.json;
-  assert.deepEqual(trace.events.map((e: any) => e.kind), ['created', 'tested', 'tested', 'stored', 'dispatched']);
+  // The device's test is stamped with its own (second-resolution) clock, so it may sort just before creation.
+  const kinds = trace.events.map((e: any) => e.kind);
+  assert.deepEqual(kinds.slice(0, 3).sort(), ['created', 'tested', 'tested']);
+  assert.deepEqual(kinds.slice(3), ['stored', 'dispatched']);
   assert.equal(trace.lot.status, 'dispatched');
   assert.equal(trace.storage.length, 1);
   assert.ok(trace.storage[0].conditions.some((c: any) => c.metric === 'produce.moisture'));

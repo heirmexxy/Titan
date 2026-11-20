@@ -5,14 +5,26 @@
  * provisioning, Ed25519 signing, envelopes, topics, sequence numbers, offline buffering, config and commands.
  * Keep your existing sensor and LCD code; use this for everything that talks to the cloud.
  *
+ * Connection: Wi-Fi or GSM (4G Cat-1 modem), chosen in config.h with TITAN_LINK. Everything above the link layer
+ * (signing, envelopes, buffering, provisioning, updates) is the same for both.
+ *
  * Libraries (Arduino Library Manager unless noted):
- *   PubSubClient (Nick O'Leary) · ArduinoJson 7 · DHT sensor library (Adafruit)
+ *   PubSubClient (Nick O'Leary) · ArduinoJson 7 · DHT sensor library (Adafruit) · ArduinoHttpClient (Arduino)
+ *   GSM builds also: TinyGSM (Volodymyr Shymanskyy) · ESP_SSLClient (Mobizt): TLS on the ESP32 over the modem's plain TCP
  *   Monocypher 4.x: copy monocypher.c/.h and optional/monocypher-ed25519.c/.h from https://monocypher.org into this sketch folder
  * Board settings for production: enable Flash Encryption, Secure Boot v2 and NVS encryption (see docs/wareguard-firmware-migration.md).
  */
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
+#include "config.h"   // DEVICE_ID, TITAN_LINK, Wi-Fi or SIM settings, TITAN_URL, MQTT_HOST, pins, root certificates
+
+#if TITAN_LINK == TITAN_LINK_GSM
+  // The modem model must be defined before TinyGSM is included (set in config.h, e.g. TINY_GSM_MODEM_SIM7600).
+  #include <TinyGsmClient.h>
+  #include <ESP_SSLClient.h>
+#else
+  #include <WiFi.h>
+  #include <WiFiClientSecure.h>
+#endif
+#include <ArduinoHttpClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
@@ -28,11 +40,18 @@ extern "C" {
 #include "monocypher.h"
 #include "monocypher-ed25519.h"
 }
-#include "config.h"   // WIFI_SSID, WIFI_PASS, TITAN_URL, MQTT_HOST, DEVICE_ID, pins, ISRG_ROOT_X1
 
-// ---------- State ----------
+// ---------- Link layer: one TLS connection for MQTT, a second for HTTPS (provisioning, fallback, updates) ----------
+#if TITAN_LINK == TITAN_LINK_GSM
+HardwareSerial SerialAT(1);
+TinyGsm modem(SerialAT);
+TinyGsmClient gsmMqtt(modem, 0), gsmHttp(modem, 1);   // two sockets on the modem
+ESP_SSLClient tls, httpsTls;                           // TLS runs on the ESP32, so the root certificate is checked here
+#else
+WiFiClientSecure tls, httpsTls;
+#endif
+
 Preferences prefs;
-WiFiClientSecure tls;
 PubSubClient mqtt(tls);
 DHT dht(PIN_DHT, DHT22);
 
@@ -53,6 +72,100 @@ void sendHeartbeat();
 void sendEvent(const char *code, const char *ch, const char *sev, const char *msg);
 
 String topic(const char *kind) { return String("titan/v1/") + DEVICE_ID + "/up/" + kind; }
+
+// ---------- Link layer ----------
+// TLS needs the right time to check certificates, so the clock is set before any connection.
+bool clockSet() { return time(nullptr) > 1700000000; }
+
+#if TITAN_LINK == TITAN_LINK_GSM
+const char *linkKind() { return "gsm"; }
+
+void modemPowerOn() {
+  pinMode(GSM_PWRKEY, OUTPUT);
+  digitalWrite(GSM_PWRKEY, LOW); delay(100);
+  digitalWrite(GSM_PWRKEY, HIGH); delay(1000);         // SIM7600 / A7670: pulse PWRKEY to switch on
+  digitalWrite(GSM_PWRKEY, LOW);
+}
+
+bool gsmClock() {
+  // Network time: the modem's own NTP first, then the operator's time (NITZ).
+  modem.NTPServerSync("pool.ntp.org", 0);
+  int y, mo, d, h, mi, sec; float tz;
+  for (int i = 0; i < 5; i++) {
+    if (modem.getNetworkTime(&y, &mo, &d, &h, &mi, &sec, &tz) && y >= 2024) {
+      struct tm t = {}; t.tm_year = y - 1900; t.tm_mon = mo - 1; t.tm_mday = d; t.tm_hour = h; t.tm_min = mi; t.tm_sec = sec;
+      setenv("TZ", "UTC0", 1); tzset();
+      time_t utc = mktime(&t) - (time_t)(tz * 3600);      // the modem reports local time and its offset
+      timeval tv = { utc, 0 }; settimeofday(&tv, nullptr);
+      return true;
+    }
+    delay(2000);
+  }
+  return false;
+}
+
+void linkBegin() {
+  SerialAT.begin(GSM_BAUD, SERIAL_8N1, GSM_RX, GSM_TX);
+  modemPowerOn();
+  delay(3000);
+  if (!modem.init()) modem.restart();
+  if (strlen(GSM_SIM_PIN)) modem.simUnlock(GSM_SIM_PIN);
+  for (auto *c : { &tls, &httpsTls }) {
+    c->setCACert(TITAN_ROOT_CAS);
+    c->setBufferSizes(4096, 1024);                     // enough for Titan's certificate chain; lower RAM than 16 KB
+    c->setTimeout(30000);
+  }
+  tls.setClient(&gsmMqtt);
+  httpsTls.setClient(&gsmHttp);
+}
+
+/** Brings the data connection up if it is down. Returns true when online. Never blocks for long. */
+bool linkUp() {
+  static uint32_t nextTry = 0, backoff = 10000;
+  if (modem.isGprsConnected()) return true;
+  if (millis() < nextTry) return false;
+  bool ok = modem.waitForNetwork(60000L) && modem.gprsConnect(GSM_APN, GSM_USER, GSM_PASS);
+  if (ok) { backoff = 10000; if (!clockSet()) gsmClock(); }
+  else { nextTry = millis() + backoff; backoff = min<uint32_t>(backoff * 2, 600000); }
+  return ok && clockSet();
+}
+
+int linkSignal() {                                      // dBm, from the modem's 0–31 signal quality
+  int csq = modem.getSignalQuality();
+  return (csq <= 0 || csq == 99) ? -113 : -113 + 2 * csq;
+}
+#else
+const char *linkKind() { return "wifi"; }
+
+void linkBegin() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  tls.setCACert(TITAN_ROOT_CAS);
+  httpsTls.setCACert(TITAN_ROOT_CAS);
+}
+
+bool linkUp() {
+  static uint32_t lastKick = 0;
+  if (WiFi.status() != WL_CONNECTED) {
+    if (millis() - lastKick > 15000) { WiFi.reconnect(); lastKick = millis(); }
+    return false;
+  }
+  return clockSet();
+}
+
+int linkSignal() { return WiFi.RSSI(); }
+#endif
+
+/** Waits (up to `ms`) for the link and the clock, e.g. at start-up. */
+bool linkWait(uint32_t ms) {
+  uint32_t until = millis() + ms;
+  while (millis() < until) { if (linkUp()) return true; delay(500); }
+  return false;
+}
+
+// ---------- HTTPS over whichever link (provisioning, fallback, firmware download) ----------
+String urlHost() { String u = TITAN_URL; u.replace("https://", ""); int s = u.indexOf('/'); return s < 0 ? u : u.substring(0, s); }
 
 // ---------- base64url (no padding) ----------
 String b64url(const uint8_t *data, size_t len) {
@@ -130,16 +243,16 @@ bool provision(const String &code) {
   uint8_t seed[32];
   esp_fill_random(seed, sizeof seed);
   crypto_ed25519_key_pair(secretKey, publicKey, seed); // wipes seed
-  HTTPClient http;
-  WiFiClientSecure c; c.setCACert(ISRG_ROOT_X1);
-  http.begin(c, String(TITAN_URL) + "/api/provision");
-  http.addHeader("Content-Type", "application/json");
+  if (!linkWait(120000)) { Serial.println("No connection for provisioning yet"); return false; }
   JsonDocument req;
   req["deviceId"] = DEVICE_ID; req["code"] = code; req["publicKey"] = b64url(publicKey, 32);
   String out; serializeJson(req, out);
-  int status = http.POST(out);
-  String resp = http.getString();
-  http.end();
+  HttpClient http(httpsTls, urlHost(), 443);
+  http.setHttpResponseTimeout(30000);
+  http.post("/api/provision", "application/json", out);
+  int status = http.responseStatusCode();
+  String resp = http.responseBody();
+  http.stop();
   if (status != 200) { Serial.printf("Provisioning failed (%d): %s\n", status, resp.c_str()); return false; }
   JsonDocument res; deserializeJson(res, resp);
   keyId = res["keyId"].as<String>(); token = res["token"].as<String>();
@@ -195,27 +308,32 @@ String runOta(JsonVariantConst a) {
   // Titan signs the digest; check the signature before downloading anything.
   if (crypto_ed25519_check(sig, pub, wantHash, 32) != 0) return "signature does not verify";
 
-  WiFiClientSecure c; c.setCACert(ISRG_ROOT_X1);
-  HTTPClient http; http.begin(c, url); http.setTimeout(30000);
-  http.addHeader("Authorization", String("Device ") + DEVICE_ID + ":" + token);
-  int code = http.GET();
-  if (code != 200) { http.end(); return "download failed " + String(code); }
-  if ((size_t)http.getSize() != size) { http.end(); return "size mismatch"; }
-  if (!Update.begin(size)) { http.end(); return "no room for update"; }
+  String path = url.substring(String(TITAN_URL).length());
+  HttpClient http(httpsTls, urlHost(), 443);
+  http.setHttpResponseTimeout(30000);
+  http.beginRequest();
+  http.get(path);
+  http.sendHeader("Authorization", String("Device ") + DEVICE_ID + ":" + token);
+  http.endRequest();
+  int code = http.responseStatusCode();
+  if (code != 200) { http.stop(); return "download failed " + String(code); }
+  if ((size_t)http.contentLength() != size) { http.stop(); return "size mismatch"; }
+  http.skipResponseHeaders();
+  if (!Update.begin(size)) { http.stop(); return "no room for update"; }
   mbedtls_sha256_context sha; mbedtls_sha256_init(&sha); mbedtls_sha256_starts(&sha, 0);
-  WiFiClient *st = http.getStreamPtr();
+  // Over GSM a 1.5 MB image takes a few minutes; MQTT keeps running between chunks.
   uint8_t buf[2048]; size_t got = 0; uint32_t lastData = millis();
-  while (got < size && millis() - lastData < 30000) {
-    size_t avail = st->available();
-    if (!avail) { delay(5); continue; }
-    int r = st->readBytes(buf, min(avail, sizeof buf));
+  while (got < size && millis() - lastData < 60000) {
+    int avail = http.available();
+    if (avail <= 0) { delay(5); mqtt.loop(); continue; }
+    int r = http.read(buf, min((size_t)avail, sizeof buf));
     if (r <= 0) continue;
     mbedtls_sha256_update(&sha, buf, r);
-    if (Update.write(buf, r) != (size_t)r) { Update.abort(); http.end(); return "flash write failed"; }
+    if (Update.write(buf, r) != (size_t)r) { Update.abort(); http.stop(); return "flash write failed"; }
     got += r; lastData = millis();
     mqtt.loop();
   }
-  http.end();
+  http.stop();
   uint8_t gotHash[32]; mbedtls_sha256_finish(&sha, gotHash); mbedtls_sha256_free(&sha);
   if (got != size) { Update.abort(); return "download incomplete"; }
   if (memcmp(gotHash, wantHash, 32) != 0) { Update.abort(); return "sha256 mismatch"; }
@@ -252,7 +370,7 @@ void onMessage(char *t, byte *payload, unsigned int len) {
 // ---------- Connection (§2) ----------
 void connectMqtt() {
   static uint32_t backoff = 5000, nextTry = 0;
-  if (mqtt.connected() || millis() < nextTry || WiFi.status() != WL_CONNECTED) return;
+  if (mqtt.connected() || millis() < nextTry || !linkUp()) return;
   String lwt = topic("lwt");
   if (mqtt.connect(DEVICE_ID, DEVICE_ID, token.c_str(), lwt.c_str(), 1, false, "offline", false)) {
     backoff = 5000;
@@ -276,9 +394,9 @@ void sendHeartbeat() {
   JsonDocument body;
   body["fw"] = FW_VERSION;
   JsonObject st = body["st"].to<JsonObject>();
-  st["net"] = "wifi"; st["rssi"] = WiFi.RSSI(); st["heap"] = ESP.getFreeHeap();
+  st["net"] = linkKind(); st["rssi"] = linkSignal(); st["heap"] = ESP.getFreeHeap();
   st["bufq"] = LittleFS.exists(QUEUE) ? (int)(LittleFS.open(QUEUE).size() / 300) : 0;
-  st["cfg"] = conf.cfg; st["time"] = time(nullptr) > 1700000000 ? "ntp" : "none";
+  st["cfg"] = conf.cfg; st["time"] = clockSet() ? (strcmp(linkKind(), "gsm") == 0 ? "network" : "ntp") : "none";
   st["err"].to<JsonArray>();
   publishOrQueue("state", body);
   lastHeartbeat = millis();
@@ -334,9 +452,8 @@ void setup() {
   prefs.begin("titan", false);
   seqSaved = prefs.getUInt("seq", 0);
   seq = seqSaved;                      // skip ahead past anything possibly used before a reset
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) delay(250);
-  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  linkBegin();
+  linkWait(180000);                    // keep going after 3 minutes even if offline: sensors and the alarm still work
 
   if (prefs.getBytesLength("sk") != 64) {
     Serial.println("Not provisioned. Type the provisioning code from Titan and press Enter:");
@@ -352,8 +469,7 @@ void setup() {
   String saved = prefs.getString("cfgdoc", "");
   if (saved.length()) { JsonDocument d; if (!deserializeJson(d, saved)) { conf.cfg = d["cfg"] | 0; conf.telemetryS = d["interval"]["telemetry_s"] | 10; conf.moistureS = d["interval"]["moisture_s"] | 60; conf.heartbeatS = d["interval"]["heartbeat_s"] | 60; } }
 
-  tls.setCACert(ISRG_ROOT_X1);         // validate the broker certificate (§2)
-  mqtt.setServer(MQTT_HOST, 8883);
+  mqtt.setServer(MQTT_HOST, 8883);     // the broker certificate is checked against TITAN_ROOT_CAS (§2)
   mqtt.setBufferSize(2048);            // envelopes are larger than PubSubClient's 256-byte default
   mqtt.setKeepAlive(60);
   mqtt.setCallback(onMessage);
@@ -374,8 +490,7 @@ void otaConfirmIfHealthy() {
 
 void loop() {
   otaConfirmIfHealthy();
-  if (WiFi.status() != WL_CONNECTED) WiFi.reconnect();
-  connectMqtt();
+  connectMqtt();                       // brings the link up first if needed
   mqtt.loop();
   readAndSend();
   if (millis() - lastHeartbeat >= conf.heartbeatS * 1000UL) sendHeartbeat();

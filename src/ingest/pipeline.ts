@@ -145,6 +145,7 @@ export class IngestPipeline {
     if (rows.length) {
       await this.notifier.emit('reading.created', ctx, {
         deviceId,
+        device: deviceId,   // alias: receivers that key events by device + seq
         siteId: device.siteId,
         seq: body.seq,
         buffered: body.buf,

@@ -102,3 +102,26 @@ From version 2.1 of the reference firmware, WareGuard units update themselves fr
 2. Use a partition scheme with two OTA slots (Arduino IDE: *Tools → Partition Scheme → Minimal SPIFFS (1.9MB APP with OTA)*), and turn on app rollback (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`).
 3. To release an update: raise `FW_VERSION`, build the `.bin` (*Sketch → Export Compiled Binary*), upload it on **Admin → Firmware**, and roll it out. Start with one device, then a batch of 10, then the rest.
 4. Each device checks the file's size, SHA-256 and Titan's signature before installing, and rolls back by itself if the new firmware can't reach Titan after restarting. The rollout page shows each device's progress and any failure reason.
+
+## GSM units (sites without reliable Wi-Fi)
+
+The same firmware runs over a 4G Cat-1 GSM modem. Only `config.h` changes.
+
+**Parts:** an ESP32 board with a SIMCom **SIM7600** or **A7670** modem (for example the LilyGO T-SIM7600 or T-A7670 boards), an antenna, and a data SIM. 4G Cat-1 modems also work where only 2G is available. Avoid 2G-only modems such as the SIM800, which can't make modern TLS connections reliably.
+
+**Setup:**
+1. Install the extra libraries: TinyGSM, ESP_SSLClient (Mobizt) and ArduinoHttpClient.
+2. In `config.h`, set `#define TITAN_LINK TITAN_LINK_GSM`. Then set the modem pins (`GSM_RX`, `GSM_TX`, `GSM_PWRKEY`) for your board and the APN for the SIM's network.
+3. Paste both Let's Encrypt roots (ISRG Root X1 and X2) into `TITAN_ROOT_CAS`.
+4. Build and flash as usual. The device powers the modem on, joins the network, and sets its clock from the network. The clock must be right before it can check Titan's certificate. It then provisions and connects like a Wi-Fi unit.
+
+**How it differs from Wi-Fi:**
+- TLS runs on the ESP32 itself, so the device checks Titan's certificate against the roots you pasted, exactly as on Wi-Fi.
+- MQTT and HTTPS use two separate modem connections, so firmware updates download while the device stays connected.
+- Titan sends GSM devices longer reporting intervals by default: telemetry every 60 s, moisture every 5 min, heartbeat every 5 min. That is roughly 30–60 MB of data a month per unit, including TLS overhead. Change the intervals per device on Titan if your data plan needs it.
+- The heartbeat reports `net: "gsm"` and the signal strength in dBm, so you can spot weak sites on the device page.
+
+**Test before installing:**
+- The serial log should show the network registering and the connection coming up.
+- The device should then appear online on Titan.
+- Unplug the antenna for 10 minutes and plug it back in. The buffered readings should arrive with their original times.

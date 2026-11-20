@@ -124,9 +124,11 @@ It pulls the latest code, installs packages, builds, applies new database migrat
 ## Monitoring
 
 - **On the server:** `titan-watchdog.timer` runs `deploy/watchdog.py` every minute. It restarts PostgreSQL, Titan or EMQX if one has stopped, restarts Titan if it stops answering for 3 minutes, and emails `MONITOR_EMAILS` / texts `MONITOR_PHONES` (from `.env`, via Resend and Termii) when something has been wrong for 2 minutes, every 6 hours while it stays wrong, and when it recovers.
-- **Off the server:** a watchdog cannot report that its own server is down. On another server (for example srv746534), copy `deploy/remote-monitor.sh` and add to root's crontab:
-  `*/5 * * * * RESEND_API_KEY=re_xxx MONITOR_EMAILS=titan@kitovu.com.ng /opt/titan-monitor/remote-monitor.sh`
-  Or point any uptime service (UptimeRobot, Better Stack) at `https://titan.kitovu.com.ng/healthz/deep`, which answers 503 when something critical is failing.
+- **Off the server:** a watchdog cannot report that its own server is down. `bash deploy/offsite-setup.sh 147.93.87.110` installs a check on the other server that runs every 5 minutes and emails when Titan or its MQTT port stops answering. That one script also sets up off-site backups (next section). As a second opinion, point a free uptime service (UptimeRobot, Better Stack) at `https://titan.kitovu.com.ng/healthz/deep`, which answers 503 when something critical is failing.
+
+## Off-site backups
+
+`bash deploy/offsite-setup.sh 147.93.87.110` (once, as root). It asks once for the other server's root password, then installs an SSH key. From then on, the nightly backup copies each day's database dump and settings to `/var/backups/titan-offsite` on that server and keeps 30 days there. The health page shows whether last night's copy arrived. To restore, copy the dump back and run `pg_restore -d titan titan-YYYY-MM-DD.dump`.
 - **In the admin:** System health shows each check, the worker and watchdog heartbeats, backups and certificate expiry.
 
 ## Firmware signing key

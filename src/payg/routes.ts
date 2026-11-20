@@ -72,6 +72,14 @@ export function registerPayg(r: Router, payg: PaygService, auth: ActorResolvers,
   mount(r, defs, auth);
 
   // ---------- Public pay page ----------
+  // Codes are short, so slow down anyone trying many of them.
+  const hits = new Map<string, { n: number; reset: number }>();
+  const limit = (ip: string, max = 30) => {
+    const now = Date.now();
+    const h = hits.get(ip);
+    if (!h || h.reset < now) { hits.set(ip, { n: 1, reset: now + 60_000 }); if (hits.size > 50_000) hits.clear(); return; }
+    if (++h.n > max) throw new HttpError(429, 'rate_limited', 'Too many requests. Wait a minute and try again.');
+  };
   const page = (title: string, body: string) => `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title><meta name="robots" content="noindex"><style>
 body{margin:0;font-family:system-ui,sans-serif;background:#EEF2F0;color:#14213D}main{max-width:420px;margin:0 auto;padding:1.5rem 1rem}
@@ -83,6 +91,7 @@ button{font:inherit;font-weight:700;width:100%;padding:.8rem;border:0;border-rad
 <body><main>${body}</main></body></html>`;
 
   r.get('/pay/:code', async (req) => {
+    limit(req.ip);
     const code = req.params.code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
     let acc;
     try { acc = await payg.getAccount(code, null); } catch { return { status: 404, body: page('Not found', '<div class="card"><h1>Payment code not found</h1><p>Check the code on your appliance or receipt.</p></div>'), headers: { 'Content-Type': 'text/html; charset=utf-8' } }; }
@@ -106,6 +115,7 @@ ${acc.status === 'paid_off' ? '<p class="ok">This appliance is fully paid. Nothi
 
   // Form post (urlencoded) or JSON → Paystack checkout.
   r.post('/api/pay/:code', async (req) => {
+    limit(req.ip, 10);
     if (!o.paystack?.enabled) throw new HttpError(503, 'payments_disabled', 'Online payment is not available');
     const form = req.body ?? Object.fromEntries(new URLSearchParams(req.rawBody.toString('utf8')));
     const acc = await wrap(() => payg.getAccount(req.params.code, null));

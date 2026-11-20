@@ -108,7 +108,7 @@ before(async () => {
   const devices = new DeviceService(store, broker);
   const apiKey = createApiKeyAuth(store);
   const paystackHooks: any[] = [];
-  const app = createApp({ store, pipeline, devices, email, billing: null, internalSecret: 's', publicUrl: 'http://t', demoInbox: 'x', mqtt: { host: 'm', port: 1 }, actuators, carbon, apiKey, paystackHooks, extraWebhookEvents: PAYG_EVENTS });
+  const app = createApp({ store, pipeline, devices, email, billing: null, internalSecret: 's', publicUrl: 'http://t', demoInbox: 'x', mqtt: { host: 'm', port: 1 }, actuators, carbon, apiKey, paystackHooks, extraWebhookEvents: PAYG_EVENTS, staticDir: join(process.cwd(), 'web') });
   const admin = registerAdmin(app, { pool: pool!, devices, actuators, carbon, secureCookies: false });
   const cons = registerConsole(app, { pool: pool!, store, devices, actuators, carbon, billing: null, publicUrl: 'http://t', secureCookies: false });
   const agent = new OpsAgent(pool!, new Writer(), email, 'http://t');
@@ -386,4 +386,25 @@ test('evidence fingerprint ignores readiness and registry labels', { skip }, asy
   await q(`UPDATE carbon_activities SET result = jsonb_set(result, '{netTco2e}', '1.3') WHERE project_id = $1`, [project]);
   const c = await ext.registry.evidence(project);
   assert.notEqual(a.sha256, c.sha256, 'a changed result changes the fingerprint');
+});
+
+test('webhook creation returns id and secret at the top level (StorageX reads them there)', { skip }, async () => {
+  const r = await asKey('POST', '/v1/webhooks', { url: 'https://storagex.example/hooks/titan', events: ['reading.created', 'alert.opened'] });
+  assert.equal(r.status, 201, r.text);
+  assert.ok(r.json.id && r.json.secret && r.json.webhook.id === r.json.id);
+  assert.equal((await asKey('DELETE', `/v1/webhooks/${r.json.id}`)).status, 204);
+});
+
+test('security: headers, proxied internal calls refused, path traversal blocked', { skip }, async () => {
+  const page = await call('GET', '/signup/');
+  assert.match(page.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+  assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
+  const api = await call('GET', '/api/firmware/public-key');
+  assert.equal(api.headers.get('cache-control'), 'no-store');
+  // EMQX hooks are only for this machine: the same call through the proxy is refused even with the secret.
+  const viaProxy = await call('POST', '/internal/emqx/auth', { username: 'x', password: 'y' }, { 'X-Titan-Internal': 's', 'X-Forwarded-For': '203.0.113.9' });
+  assert.equal(viaProxy.status, 404);
+  const direct = await call('POST', '/internal/emqx/auth', { username: 'x', password: 'y', clientid: 'x' }, { 'X-Titan-Internal': 's' });
+  assert.equal(direct.status, 200);
+  for (const p of ['/..%2f..%2fpackage.json', '/%2e%2e/src/config.ts', '/%E0%A4%A']) assert.equal((await call('GET', p)).status, 404, p);
 });

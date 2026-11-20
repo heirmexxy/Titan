@@ -1,6 +1,6 @@
 import { createReadStream, statSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 
 export interface Req {
   method: string;
@@ -11,6 +11,8 @@ export interface Req {
   rawBody: Buffer;
   body: any;
   ip: string;
+  /** True only for direct calls from this machine (EMQX hooks), never for requests through the web proxy. */
+  local: boolean;
 }
 
 export interface Res {
@@ -79,7 +81,7 @@ export class Router {
         }
         const out = await found.route.handler({
           method, path: url.pathname, params: found.params, query: url.searchParams, headers: req.headers, rawBody, body,
-          ip: (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() ?? req.socket.remoteAddress ?? '',
+          ip: clientIp(req), local: isLocal(req),
         });
         send(res, out.status ?? 200, out.body, out.headers);
       } catch (e) {
@@ -92,12 +94,20 @@ export class Router {
 
   private serveStatic(pathname: string, res: ServerResponse): boolean {
     const root = resolve(this.staticDir!);
-    let file = normalize(join(root, decodeURIComponent(pathname)));
-    if (!file.startsWith(root)) return false;
+    let decoded: string;
+    try { decoded = decodeURIComponent(pathname); } catch { return false; }
+    if (decoded.includes('\0')) return false;
+    let file = normalize(join(root, decoded));
+    // Must stay inside the folder: "/web" must not match a sibling such as "/web-private".
+    if (file !== root && !file.startsWith(root + sep)) return false;
     try {
       let st = statSync(file);
       if (st.isDirectory()) { file = join(file, 'index.html'); st = statSync(file); }
-      res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream', 'Content-Length': st.size, 'Cache-Control': /\.(html|webmanifest)$|sw\.js$/.test(file) ? 'no-cache' : 'public, max-age=300' });
+      res.writeHead(200, {
+        ...securityHeaders(extname(file) === '.html'),
+        'Content-Type': MIME[extname(file)] ?? 'application/octet-stream', 'Content-Length': st.size,
+        'Cache-Control': /\.(html|webmanifest)$|sw\.js$/.test(file) ? 'no-cache' : 'public, max-age=300',
+      });
       createReadStream(file).pipe(res);
       return true;
     } catch {
@@ -120,16 +130,54 @@ function readBody(req: IncomingMessage, max = MAX_BODY): Promise<Buffer> {
   });
 }
 
+// ---------- Client address and proxy trust ----------
+// Titan sits behind a reverse proxy (Traefik or Nginx) on this machine or the Docker bridge. Only then is
+// X-Forwarded-For trusted, and only its last entry (the address the proxy itself saw); earlier entries are
+// whatever the client claimed.
+const isLoopback = (a: string) => a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+const isProxyHop = (a: string) => isLoopback(a) || /^(::ffff:)?172\.(1[6-9]|2\d|3[01])\./.test(a) || /^(::ffff:)?10\./.test(a) || /^(::ffff:)?192\.168\./.test(a);
+export function clientIp(req: IncomingMessage): string {
+  const remote = req.socket.remoteAddress ?? '';
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string' && xff && isProxyHop(remote)) {
+    const hops = xff.split(',').map((x) => x.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
+  return remote;
+}
+function isLocal(req: IncomingMessage): boolean {
+  return isLoopback(req.socket.remoteAddress ?? '') && !req.headers['x-forwarded-for'] && !req.headers['x-forwarded-host'];
+}
+
+// ---------- Security headers ----------
+const CSP = [
+  "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com", "img-src 'self' data: blob: https:", "media-src 'self'", "connect-src 'self'",
+  "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
+  "form-action 'self' https://checkout.paystack.com",
+].join('; ');
+export function securityHeaders(html: boolean): Record<string, string> {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000',
+    'Permissions-Policy': 'geolocation=(self), camera=(self), microphone=(), payment=()',
+    ...(html ? { 'Content-Security-Policy': CSP, 'X-Frame-Options': 'DENY' } : {}),
+  };
+}
+
 function send(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
   if (res.headersSent) return;
-  if (body === undefined || body === null) { res.writeHead(status, headers); res.end(); return; }
+  const html = /text\/html/.test(headers['Content-Type'] ?? '');
+  const base = { ...securityHeaders(html), 'Cache-Control': 'no-store' };
+  if (body === undefined || body === null) { res.writeHead(status, { ...base, ...headers }); res.end(); return; }
   if (Buffer.isBuffer(body)) {
-    res.writeHead(status, { 'Content-Type': 'application/octet-stream', 'Content-Length': String(body.length), ...headers });
+    res.writeHead(status, { ...base, 'Content-Type': 'application/octet-stream', 'Content-Length': String(body.length), ...headers });
     res.end(body);
     return;
   }
   const isText = typeof body === 'string';
   const payload = isText ? body : JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': isText ? 'text/plain; charset=utf-8' : 'application/json', ...headers });
+  res.writeHead(status, { ...base, 'Content-Type': isText ? 'text/plain; charset=utf-8' : 'application/json', ...headers });
   res.end(payload);
 }

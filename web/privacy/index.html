@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy notice · Titan by Kitovu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #14213D; --ink-soft: #4A5875; --muted: #6B778F; --paper: #EEF2F0; --mist: #D5DEDA; --grain: #E2B23A; }
+  body { margin: 0; font-family: 'Archivo', system-ui, sans-serif; background: var(--paper); color: var(--ink); line-height: 1.6; }
+  a { color: inherit; } :focus-visible { outline: 3px solid var(--grain); outline-offset: 2px; }
+  header, main { max-width: 760px; margin: 0 auto; padding: 1.2rem; }
+  .brand { font-variation-settings: 'wdth' 125; font-weight: 800; font-size: 1.4rem; text-decoration: none; }
+  h1 { font-variation-settings: 'wdth' 118; font-weight: 800; font-size: clamp(1.8rem, 4vw, 2.4rem); line-height: 1.1; margin: .6rem 0; }
+  h2 { font-variation-settings: 'wdth' 110; font-size: 1.2rem; margin: 2rem 0 .5rem; }
+  p, li { color: var(--ink-soft); } .muted { color: var(--muted); font-size: .9rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; } th, td { text-align: left; padding: .5rem .5rem .5rem 0; border-bottom: 1px solid var(--mist); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; } .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<header><a class="brand" href="/">Titan</a></header>
+<main>
+  <h1>Privacy notice</h1>
+  <p class="muted">Last updated 20 November 2026</p>
+  <p>Titan is an IoT platform run by <b>Kitovu Technology Company Limited</b>, Oyo State, Nigeria ("Kitovu", "we"). This notice explains what personal data Titan handles, why, who sees it and what you can ask us to do. It follows the Nigeria Data Protection Act 2023.</p>
+
+  <h2>Whose data, and our role</h2>
+  <ul>
+    <li><b>Kitovu's own installations (WareGuard):</b> Kitovu decides how this data is used. We are its <b>controller</b>.</li>
+    <li><b>Your organisation's devices, customers and records</b> on Titan (for example PAYG customers, farmers in lot records, your staff accounts): your organisation decides how they are used. Your organisation is the controller and Kitovu <b>processes</b> the data on its behalf and on its instructions.</li>
+    <li><b>Your own account</b> (name, email, phone, sign-in history): Kitovu is the controller.</li>
+  </ul>
+
+  <h2>What we collect and why</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Data</th><th>Why</th><th>Legal basis</th></tr></thead>
+    <tbody>
+      <tr><td>Account details: name, work email, phone, company, password (stored only as a one-way hash), sign-in times and IP address</td><td>To run your account, keep it secure and contact you about it</td><td>Contract; legitimate interest in security</td></tr>
+      <tr><td>Device data: sensor readings, device status, site name and location</td><td>To show conditions, send alerts and share data you choose to share</td><td>Contract</td></tr>
+      <tr><td>PAYG customer details: name, phone, optional email and the client's customer reference; payments and credit dates</td><td>To unlock and lock appliances as payments arrive and send reminders</td><td>The client's contract with its customer (Kitovu as processor)</td></tr>
+      <tr><td>Lot and quality records: farmer or cluster names, places of origin with GPS, test results, who recorded them</td><td>Traceability and quality grading for buyers and lenders</td><td>The organisation's contract or legitimate interest (Kitovu as processor or controller, as above)</td></tr>
+      <tr><td>Verifier accounts: name, email, verification body</td><td>To give independent verifiers access to carbon evidence</td><td>Legitimate interest of the project owner</td></tr>
+      <tr><td>Billing: invoices and the last four digits, brand and expiry of a saved card (the card itself is held by Paystack)</td><td>To charge for Titan</td><td>Contract; legal obligation to keep accounting records</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Who we share it with</h2>
+  <p>We never sell personal data. Data leaves Titan only:</p>
+  <ul>
+    <li>to organisations <b>you</b> grant access to (for example a lender or a warehouse platform), limited to the sites, readings and dates you choose, with every access logged;</li>
+    <li>to the service providers that run parts of Titan for us, under contract: <b>Hostinger</b> (servers), <b>Resend</b> (email), <b>Termii</b> (SMS), <b>Paystack</b> (payments) and, only if switched on, <b>Anthropic</b> (writing alert summaries and monthly reports). Some of these providers process data outside Nigeria; we rely on their contractual safeguards for those transfers;</li>
+    <li>when the law requires it.</li>
+  </ul>
+
+  <h2>How long we keep it</h2>
+  <ul>
+    <li>Sensor readings: as long as the organisation's plan or retention setting says, then deleted.</li>
+    <li>Accounts: while active, then up to 12 months after closure.</li>
+    <li>Billing records: 6 years, as tax law requires.</li>
+    <li>Carbon evidence: as long as the registry the credits were issued under requires.</li>
+    <li>Backups: up to 30 days.</li>
+  </ul>
+
+  <h2>How we protect it</h2>
+  <p>Encrypted connections everywhere. Device readings are signed on the device so changes can be detected. Passwords, API keys and device tokens are stored only as hashes. Access is limited by organisation and role, and Kitovu staff access is logged. Backups are copied to a second server we control.</p>
+
+  <h2>Your rights</h2>
+  <p>You can ask to see, correct, delete or receive a copy of your personal data, object to or restrict how we use it, and withdraw consent where we relied on it. If your data is held for an organisation (for example as a PAYG customer or farmer), ask that organisation first; we will help it answer you. You can also complain to the <a href="https://ndpc.gov.ng" rel="noopener">Nigeria Data Protection Commission</a>.</p>
+
+  <h2>Contact</h2>
+  <p>Data protection contact, Kitovu Technology Company Limited: <a href="mailto:titan@kitovu.com.ng?subject=Privacy">titan@kitovu.com.ng</a>. We answer within 30 days.</p>
+  <p>If we have a data breach that puts your rights at risk, we will tell the NDPC within 72 hours and tell you without undue delay.</p>
+</main>
+</body>
+</html>

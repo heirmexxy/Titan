@@ -43,6 +43,8 @@ export function createApp(d: AppDeps): Router {
 
   // ---------- helpers ----------
   const internal = (req: Req) => {
+    // EMQX calls these on 127.0.0.1. Anything that came through the web proxy is refused, even with the secret.
+    if (!req.local) throw new HttpError(404, 'not_found');
     const s = req.headers['x-titan-internal'];
     if (typeof s !== 'string' || !safeEqual(s, d.internalSecret)) throw new HttpError(401, 'unauthorized');
   };
@@ -350,7 +352,8 @@ export function createApp(d: AppDeps): Router {
     const secret = `whsec_${randomToken(24)}`;
     const w = await d.store.createWebhook(key.orgId, url, events, secret);
     await d.store.audit(`apikey:${key.id}`, key.orgId, 'webhook.created', w.id, { url, events });
-    return { status: 201, body: { webhook: { ...w } } }; // secret shown once
+    // Secret shown once. id and secret are repeated at the top level for clients that read them there.
+    return { status: 201, body: { webhook: { ...w }, id: w.id, secret: w.secret } };
   });
   r.delete('/v1/webhooks/:id', async (req) => {
     const key = await apiKey(req, 'manage:webhooks');

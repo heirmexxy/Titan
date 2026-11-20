@@ -2,7 +2,7 @@
  * Health checks for Titan itself. /healthz/deep is what the on-server watchdog and any outside uptime
  * monitor poll; it answers 503 when something needs attention. The admin "System health" page shows the details.
  */
-import { readdirSync, statSync, statfsSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, statfsSync } from 'node:fs';
 import { connect } from 'node:tls';
 import type { Router } from '../http/router.js';
 
@@ -96,6 +96,13 @@ export class Health {
       const hours = newest ? Math.round((Date.now() - newest) / 3_600_000) : null;
       add('backups', hours !== null && hours <= 30, 'warning', hours === null ? 'no backups found' : `newest is ${hours}h old`);
     } catch { add('backups', false, 'warning', `cannot read ${this.d.backupDir}`); }
+    // Off-site copy (written by deploy/backup.sh once offsite-setup.sh has run).
+    try {
+      const st = readFileSync(`${this.d.backupDir}/offsite-status`, 'utf8').trim();
+      const [state, at, host] = st.split(' ');
+      const hours = Math.round((Date.now() - new Date(at).getTime()) / 3_600_000);
+      add('off-site backup', state === 'ok' && hours <= 30, 'warning', `${state === 'ok' ? 'copied' : 'copy failed'} to ${host ?? '?'} ${hours}h ago`);
+    } catch { add('off-site backup', false, 'warning', 'not set up (run deploy/offsite-setup.sh)'); }
 
     // Certificates (checked at most hourly)
     if (!this.certCache || Date.now() - this.certCache.at > 3_600_000) {
